@@ -2,6 +2,7 @@ import SwiftUI
 
 @main
 struct TrackApp: App {
+    @UIApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
     @StateObject private var store = HabitStore()
     @Environment(\.scenePhase) private var scenePhase
 

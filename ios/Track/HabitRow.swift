@@ -2,16 +2,15 @@ import SwiftUI
 
 struct HabitRow: View {
     let habit: Habit
-    let onEdit: () -> Void
+    let onOpen: () -> Void
     let onToggle: () -> Void
 
     var body: some View {
-        let color = Color(hex: habit.colorHex)
         let done = habit.isDoneToday
 
-        // Two sibling buttons rather than nested ones, so a tap on the circle never opens the editor.
+        // Two sibling buttons rather than nested ones, so a tap on the circle never opens the details.
         HStack(spacing: 14) {
-            Button(action: onEdit) {
+            Button(action: onOpen) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(habit.name)
                         .font(.body.weight(.semibold))
@@ -20,6 +19,7 @@ struct HabitRow: View {
                     Text(subtitle)
                         .font(.footnote)
                         .foregroundStyle(Color.secondary)
+                        .lineLimit(1)
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -27,18 +27,8 @@ struct HabitRow: View {
             .buttonStyle(.plain)
 
             Button(action: onToggle) {
-                ZStack {
-                    Circle()
-                        .strokeBorder(done ? color : Color(.separator), lineWidth: 2)
-                    if done {
-                        Circle().fill(color)
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 17, weight: .bold))
-                            .foregroundStyle(Color.white)
-                    }
-                }
-                .frame(width: 44, height: 44)
-                .contentShape(Circle())
+                CheckCircle(color: Color(hex: habit.colorHex), done: done, size: 44, idleColor: Color(.separator))
+                    .contentShape(Circle())
             }
             .buttonStyle(.plain)
             .sensoryFeedback(.success, trigger: done) { _, newValue in newValue }
@@ -51,7 +41,10 @@ struct HabitRow: View {
     }
 
     private var subtitle: String {
+        var parts = [habit.periodLabel]
+        if let time = habit.reminderLabel { parts.append("🔔 \(time)") }
         let streak = habit.currentStreak()
-        return streak > 0 ? "\(habit.periodLabel) · серия \(streak) 🔥" : habit.periodLabel
+        if streak > 0 { parts.append("серия \(streak) 🔥") }
+        return parts.joined(separator: " · ")
     }
 }

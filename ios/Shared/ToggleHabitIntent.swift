@@ -15,7 +15,8 @@ struct ToggleHabitIntent: AppIntent {
 
     func perform() async throws -> some IntentResult {
         if let id = UUID(uuidString: habitID) {
-            HabitStorage.toggle(habitID: id)
+            let habits = HabitStorage.update(habitID: id) { $0.toggle() }
+            await ReminderScheduler.reschedule(habits)
         }
         return .result()
     }

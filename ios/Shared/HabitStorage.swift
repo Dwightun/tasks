@@ -21,10 +21,13 @@ enum HabitStorage {
         try? data.write(to: fileURL, options: .atomic)
     }
 
-    static func toggle(habitID: UUID, on date: Date = Date()) {
+    /// Applies a change to one habit on disk and returns the full updated list.
+    @discardableResult
+    static func update(habitID: UUID, _ change: (inout Habit) -> Void) -> [Habit] {
         var habits = load()
-        guard let index = habits.firstIndex(where: { $0.id == habitID }) else { return }
-        habits[index].toggle(on: date)
+        guard let index = habits.firstIndex(where: { $0.id == habitID }) else { return habits }
+        change(&habits[index])
         save(habits)
+        return habits
     }
 }

@@ -7,6 +7,9 @@ struct HabitEditor: View {
     @State private var draft: Habit
     @State private var usesWeekdays: Bool
     @State private var weekdays: Set<Int>
+    @State private var reminderOn: Bool
+    @State private var reminderTime: Date
+    @State private var notificationsDenied = false
     private let isNew: Bool
 
     static let palette = ["#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#38D9A9", "#4DABF7", "#748FFC", "#DA77F2"]
@@ -22,6 +25,11 @@ struct HabitEditor: View {
             _usesWeekdays = State(initialValue: false)
             _weekdays = State(initialValue: [0, 1, 2, 3, 4])
         }
+        let minutes = initial.reminderMinutes ?? 9 * 60
+        _reminderOn = State(initialValue: initial.reminderMinutes != nil)
+        _reminderTime = State(initialValue: Calendar.current.date(
+            bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()
+        ) ?? Date())
     }
 
     private var trimmedName: String {
@@ -58,6 +66,27 @@ struct HabitEditor: View {
                             }
                         }
                     }
+                }
+
+                Section {
+                    Toggle("Напоминание", isOn: $reminderOn)
+                    if reminderOn {
+                        DatePicker("Время", selection: $reminderTime, displayedComponents: .hourAndMinute)
+                    }
+                } footer: {
+                    if reminderOn && notificationsDenied {
+                        Text("Уведомления выключены. Включите их в Настройках → Dwightun Habits → Уведомления.")
+                    } else if reminderOn {
+                        Text("Придёт только в дни по расписанию и только если привычка ещё не отмечена.")
+                    }
+                }
+                .onChange(of: reminderOn) { _, isOn in
+                    if isOn {
+                        Task { await checkNotificationPermission() }
+                    }
+                }
+                .task {
+                    if reminderOn { await checkNotificationPermission() }
                 }
 
                 if !isNew {
@@ -124,9 +153,20 @@ struct HabitEditor: View {
         .buttonStyle(.borderless)
     }
 
+    private func checkNotificationPermission() async {
+        let granted = await ReminderScheduler.requestAuthorization()
+        notificationsDenied = !granted
+    }
+
     private func save() {
         draft.name = trimmedName
         draft.periodicity = (usesWeekdays && !weekdays.isEmpty) ? .weekdays(weekdays) : .daily
+        if reminderOn {
+            let time = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
+            draft.reminderMinutes = (time.hour ?? 9) * 60 + (time.minute ?? 0)
+        } else {
+            draft.reminderMinutes = nil
+        }
         store.upsert(draft)
         dismiss()
     }

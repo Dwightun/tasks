@@ -3,21 +3,21 @@ import SwiftUI
 struct ContentView: View {
     @EnvironmentObject private var store: HabitStore
     @State private var isCreating = false
-    @State private var editing: Habit?
+    @State private var path: [UUID] = []
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     if store.habits.isEmpty {
                         emptyState
                     } else {
-                        ActivityHeatmap(habits: store.habits)
+                        ActivityHeatmap(fill: Heatmap.combinedFill(for: store.habits))
                         VStack(spacing: 10) {
                             ForEach(store.habits) { habit in
                                 HabitRow(
                                     habit: habit,
-                                    onEdit: { editing = habit },
+                                    onOpen: { path.append(habit.id) },
                                     onToggle: { store.toggleToday(habit.id) }
                                 )
                             }
@@ -38,11 +38,11 @@ struct ContentView: View {
                     }
                 }
             }
+            .navigationDestination(for: UUID.self) { id in
+                HabitDetailView(habitID: id)
+            }
             .sheet(isPresented: $isCreating) {
                 HabitEditor(habit: nil).environmentObject(store)
-            }
-            .sheet(item: $editing) { habit in
-                HabitEditor(habit: habit).environmentObject(store)
             }
         }
     }
