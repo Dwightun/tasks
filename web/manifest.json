@@ -1,0 +1,9 @@
+{
+  "name": "Привычки",
+  "short_name": "Привычки",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#fafafa",
+  "theme_color": "#fafafa",
+  "icons": []
+}

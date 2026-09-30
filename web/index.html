@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Привычки</title>
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Привычки">
+<meta name="theme-color" content="#fafafa">
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <h1>Привычки</h1>
+      <button id="addBtn" class="icon-btn" aria-label="Добавить привычку">+</button>
+    </header>
+
+    <section id="activity" class="activity" hidden>
+      <div class="activity-body">
+        <div class="activity-weekday-labels">
+          <span>Пн</span><span></span><span>Ср</span><span></span><span>Пт</span><span></span><span></span>
+        </div>
+        <div class="activity-scroll" id="activityScroll">
+          <div class="activity-months" id="activityMonths"></div>
+          <div class="activity-inner" id="activityInner"></div>
+        </div>
+      </div>
+    </section>
+
+    <main id="list" class="list"></main>
+
+    <div id="emptyState" class="empty-state" hidden>
+      <p>Пока нет привычек</p>
+      <button id="emptyAddBtn" class="btn-primary">Добавить первую</button>
+    </div>
+  </div>
+
+  <div id="sheetOverlay" class="sheet-overlay" hidden>
+    <div class="sheet">
+      <div class="sheet-header">
+        <button id="cancelBtn" class="text-btn">Отмена</button>
+        <h2 id="sheetTitle">Новая привычка</h2>
+        <button id="saveBtn" class="text-btn text-btn-primary">Готово</button>
+      </div>
+
+      <div class="sheet-body">
+        <input id="nameInput" class="name-input" type="text" placeholder="Название" maxlength="40" enterkeyhint="done">
+
+        <div class="field-label">Цвет</div>
+        <div id="colorRow" class="color-row"></div>
+
+        <div class="field-label">Периодичность</div>
+        <div class="segmented" id="periodSegmented">
+          <button data-period="daily" class="segment active">Каждый день</button>
+          <button data-period="weekdays" class="segment">Дни недели</button>
+        </div>
+
+        <div id="weekdaysRow" class="weekdays-row" hidden></div>
+
+        <button id="deleteBtn" class="btn-delete" hidden>Удалить привычку</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

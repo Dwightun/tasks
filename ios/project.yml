@@ -1,0 +1,78 @@
+name: Track
+
+options:
+  bundleIdPrefix: com.roma5
+  developmentLanguage: ru
+  deploymentTarget:
+    iOS: "17.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    TARGETED_DEVICE_FAMILY: "1"
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Track:
+    type: application
+    platform: iOS
+    sources:
+      - path: Track
+      - path: Shared
+    info:
+      path: Track/Info.plist
+      properties:
+        CFBundleDisplayName: Привычки
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        ITSAppUsesNonExemptEncryption: false
+    entitlements:
+      path: Track/Track.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.roma5.track
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.roma5.track
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: Track AppStore
+    dependencies:
+      - target: TrackWidget
+    scheme: {}
+
+  TrackWidget:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: TrackWidget
+      - path: Shared
+    info:
+      path: TrackWidget/Info.plist
+      properties:
+        CFBundleDisplayName: Привычки
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        NSExtension:
+          NSExtensionPointIdentifier: com.apple.widgetkit-extension
+    entitlements:
+      path: TrackWidget/TrackWidget.entitlements
+      properties:
+        com.apple.security.application-groups:
+          - group.com.roma5.track
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.roma5.track.widget
+      configs:
+        Release:
+          CODE_SIGN_STYLE: Manual
+          CODE_SIGN_IDENTITY: Apple Distribution
+          PROVISIONING_PROFILE_SPECIFIER: Track Widget AppStore
