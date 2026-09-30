@@ -9,12 +9,21 @@ on:
 jobs:
   build:
     name: Build (simulator)
-    runs-on: macos-15
+    runs-on: macos-26
     defaults:
       run:
         working-directory: ios
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+
+      - name: Select latest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          # App Store Connect only accepts builds made with Xcode 26 or later.
+          major=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          if [ "$major" -lt 26 ]; then echo "::error::Need Xcode 26+, got $XCODE"; exit 1; fi
 
       - name: Install XcodeGen
         run: brew install xcodegen
@@ -58,7 +67,7 @@ jobs:
     name: Upload to TestFlight
     needs: [build, signing-check]
     if: needs.signing-check.outputs.ready == 'true'
-    runs-on: macos-15
+    runs-on: macos-26
     defaults:
       run:
         working-directory: ios
@@ -67,7 +76,7 @@ jobs:
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Install signing certificate and profiles
         env:
@@ -99,6 +108,15 @@ jobs:
             cp "$file" "$HOME/Library/MobileDevice/Provisioning Profiles/$uuid.mobileprovision"
             echo "Installed profile $uuid"
           done
+
+      - name: Select latest stable Xcode
+        run: |
+          XCODE=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          sudo xcode-select -s "$XCODE"
+          xcodebuild -version
+          # App Store Connect only accepts builds made with Xcode 26 or later.
+          major=$(xcodebuild -version | head -1 | awk '{print $2}' | cut -d. -f1)
+          if [ "$major" -lt 26 ]; then echo "::error::Need Xcode 26+, got $XCODE"; exit 1; fi
 
       - name: Install XcodeGen
         run: brew install xcodegen
