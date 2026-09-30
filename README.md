@@ -19,9 +19,9 @@ Xcode-проект не хранится в репозитории: он ген�
 
 | Что | Значение |
 |---|---|
-| App Group | `group.com.roma5.track` |
-| Приложение | `com.roma5.track` |
-| Виджет | `com.roma5.track.widget` |
+| App Group | `group.com.dwightun.track` |
+| Приложение | `com.dwightun.track` |
+| Виджет | `com.dwightun.track.widget` |
 | Профиль приложения | `Track AppStore` |
 | Профиль виджета | `Track Widget AppStore` |
 
@@ -30,17 +30,17 @@ Xcode-проект не хранится в репозитории: он ген�
 
 ### developer.apple.com → Certificates, Identifiers & Profiles
 
-1. **Identifiers → + → App Groups** → `group.com.roma5.track`.
-2. **Identifiers → + → App IDs → App** → Explicit `com.roma5.track`, включить **App Groups**,
+1. **Identifiers → + → App Groups** → `group.com.dwightun.track`.
+2. **Identifiers → + → App IDs → App** → Explicit `com.dwightun.track`, включить **App Groups**,
    нажать *Configure* и выбрать группу из п.1.
-3. То же самое для `com.roma5.track.widget`.
+3. То же самое для `com.dwightun.track.widget`.
 4. **Certificates → + → Apple Distribution** → загрузить CSR-файл → скачать `.cer`.
-5. **Profiles → + → App Store Connect** → App ID `com.roma5.track` → сертификат из п.4 →
+5. **Profiles → + → App Store Connect** → App ID `com.dwightun.track` → сертификат из п.4 →
    имя **`Track AppStore`** → скачать. Повторить для виджета с именем **`Track Widget AppStore`**.
 
 ### appstoreconnect.apple.com
 
-6. **Apps → + → New App**: iOS, bundle ID `com.roma5.track`, любой SKU.
+6. **Apps → + → New App**: iOS, bundle ID `com.dwightun.track`, любой SKU.
    Имя должно быть уникальным во всём App Store.
 7. **Users and Access → Integrations → Team Keys → +**, роль *App Manager*.
    Скачать `.p8` (скачивается только один раз), записать *Key ID* и *Issuer ID*.

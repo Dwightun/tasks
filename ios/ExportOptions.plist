@@ -12,9 +12,9 @@
     <string>Apple Distribution</string>
     <key>provisioningProfiles</key>
     <dict>
-        <key>com.roma5.track</key>
+        <key>com.dwightun.track</key>
         <string>Track AppStore</string>
-        <key>com.roma5.track.widget</key>
+        <key>com.dwightun.track.widget</key>
         <string>Track Widget AppStore</string>
     </dict>
     <key>uploadSymbols</key>

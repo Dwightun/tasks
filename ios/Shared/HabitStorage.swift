@@ -2,7 +2,7 @@ import Foundation
 
 /// JSON file in the App Group container, shared by the app and the widget.
 enum HabitStorage {
-    static let appGroupID = "group.com.roma5.track"
+    static let appGroupID = "group.com.dwightun.track"
 
     private static var fileURL: URL {
         // Falls back to Documents when the App Group entitlement is absent (unsigned simulator builds).
