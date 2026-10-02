@@ -48,11 +48,16 @@ struct MonthCalendar: View {
                         .font(.caption2)
                         .foregroundStyle(Color.secondary)
                 }
-                ForEach(0..<leadingBlanks, id: \.self) { _ in
-                    Color.clear.frame(height: 36)
-                }
-                ForEach(1...dayCount, id: \.self) { day in
-                    dayCell(date: calendar.date(byAdding: .day, value: day - 1, to: monthStart) ?? monthStart, today: today)
+                // One ForEach for blanks and days: separate ones reuse ids (0, 1, 2…) and LazyVGrid drops the duplicates.
+                ForEach(0..<(leadingBlanks + dayCount), id: \.self) { index in
+                    if index < leadingBlanks {
+                        Color.clear.frame(height: 36)
+                    } else {
+                        dayCell(
+                            date: calendar.date(byAdding: .day, value: index - leadingBlanks, to: monthStart) ?? monthStart,
+                            today: today
+                        )
+                    }
                 }
             }
         }
