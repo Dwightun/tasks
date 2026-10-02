@@ -8,6 +8,7 @@ extension Notification.Name {
 
 final class HabitStore: ObservableObject {
     @Published private(set) var habits: [Habit] = []
+    @Published private(set) var lastReviewedWeek: String? = ReviewSettings.lastReviewedWeek
     private var observer: NSObjectProtocol?
 
     init() {
@@ -68,6 +69,32 @@ final class HabitStore: ObservableObject {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         habits[index].endPause()
         persist()
+    }
+
+    func setWeekReason(_ id: UUID, weekStart: Date, reason: SkipReason?) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        let key = DayKey.key(for: Habit.monday(of: weekStart))
+        habits[index].weekReasons[key] = reason
+        persist()
+    }
+
+    /// Schedule changes from a review start with the next full week.
+    func applyPeriodicity(_ id: UUID, _ periodicity: Periodicity) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index].setPeriodicity(periodicity, from: WeeklyReview.effectiveDateForChange())
+        persist()
+    }
+
+    func markReviewed(weekStart: Date) {
+        let key = DayKey.key(for: Habit.monday(of: weekStart))
+        ReviewSettings.lastReviewedWeek = key
+        lastReviewedWeek = key
+    }
+
+    func updateReviewReminder(enabled: Bool, minutes: Int) {
+        ReviewSettings.isEnabled = enabled
+        ReviewSettings.minutes = minutes
+        rescheduleReminders()
     }
 
     func rescheduleReminders() {

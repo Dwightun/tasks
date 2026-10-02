@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ContentView: View {
     @EnvironmentObject private var store: HabitStore
+    @ObservedObject private var router = AppRouter.shared
     @State private var isCreating = false
     @State private var path: [UUID] = []
 
@@ -12,6 +13,7 @@ struct ContentView: View {
                     if store.habits.isEmpty {
                         emptyState
                     } else {
+                        reviewPrompt
                         returnCards
                         ActivityHeatmap(fill: Heatmap.combinedFill(for: store.habits))
                         VStack(spacing: 10) {
@@ -34,6 +36,16 @@ struct ContentView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Привычки")
             .toolbar {
+                ToolbarItem(placement: .topBarLeading) {
+                    if !store.habits.isEmpty {
+                        Button {
+                            router.showWeeklyReview = true
+                        } label: {
+                            Image(systemName: "chart.bar.xaxis")
+                        }
+                        .accessibilityLabel("Итоги недели")
+                    }
+                }
                 ToolbarItem(placement: .topBarTrailing) {
                     Button {
                         isCreating = true
@@ -48,6 +60,45 @@ struct ContentView: View {
             .sheet(isPresented: $isCreating) {
                 HabitEditor(habit: nil).environmentObject(store)
             }
+            .sheet(isPresented: $router.showWeeklyReview) {
+                WeeklyReviewView().environmentObject(store)
+            }
+        }
+    }
+
+    /// Shown Sunday through Tuesday until the week is reviewed, and only if something was planned.
+    @ViewBuilder
+    private var reviewPrompt: some View {
+        let today = Date()
+        let weekStart = WeeklyReview.defaultWeekStart(today: today)
+        let weekKey = DayKey.key(for: weekStart)
+        let isReviewTime = [6, 0, 1].contains(Habit.mondayIndex(of: today))
+        let hadPlan = store.habits.contains { $0.weekProgress(containing: weekStart).planned > 0 }
+
+        if isReviewTime, hadPlan, store.lastReviewedWeek != weekKey {
+            Button {
+                router.showWeeklyReview = true
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "chart.bar.xaxis")
+                        .font(.title3)
+                        .foregroundStyle(Heatmap.accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Итоги недели")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                        Text("Две минуты: что получилось, что мешало, что поменять")
+                            .font(.footnote)
+                            .foregroundStyle(Color.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .foregroundStyle(Color.secondary)
+                }
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
+            .buttonStyle(.plain)
         }
     }
 

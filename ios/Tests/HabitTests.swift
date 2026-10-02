@@ -37,6 +37,7 @@ final class HabitTests: XCTestCase {
         original.setStatus(.rest, onKey: "2026-09-30")
         original.plan.cue = "После работы"
         original.pauses = [Pause(kind: .travel, start: "2026-10-05", end: "2026-10-09")]
+        original.weekReasons = ["2026-09-21": .noTime]
         original.reminderMinutes = 8 * 60
 
         let data = try JSONEncoder().encode([original])
@@ -245,6 +246,86 @@ final class HabitTests: XCTestCase {
         h.startPause(.sick, from: day("2026-09-30"), until: day("2026-10-02"))
 
         XCTAssertEqual(h.pauses, [Pause(kind: .sick, start: "2026-09-30", end: "2026-10-02")])
+    }
+
+    // MARK: Weekly review
+
+    func testWeekSummaryCountsReasonsAndUnexplainedDays() {
+        var h = habit(.weekdays([0, 2, 4]))
+        h.setStatus(.full, onKey: "2026-09-21")
+        h.setStatus(.skipped, onKey: "2026-09-23", reason: .noTime)
+
+        let summary = h.weekSummary(weekStart: day("2026-09-21"), today: day("2026-10-01"))
+        XCTAssertEqual(summary.progress, WeekProgress(planned: 3, completed: 1, minimal: 0))
+        XCTAssertEqual(summary.reasons, [.noTime: 1])
+        XCTAssertEqual(summary.unexplained, 1)
+
+        h.weekReasons["2026-09-21"] = .forgot
+        let explained = h.weekSummary(weekStart: day("2026-09-21"), today: day("2026-10-01"))
+        XCTAssertEqual(explained.reasons, [.noTime: 1, .forgot: 1])
+        XCTAssertEqual(explained.unexplained, 0)
+    }
+
+    func testSuggestionFollowsMainReasonWithStableTieBreak() {
+        var h = habit(.weekdays([0, 2, 4]))
+        h.setStatus(.full, onKey: "2026-09-21")
+        h.setStatus(.skipped, onKey: "2026-09-23", reason: .noTime)
+
+        let noTime = h.reviewSuggestion(weekStart: day("2026-09-21"), today: day("2026-10-01"))
+        XCTAssertEqual(noTime?.title, "Добавить запасной вариант")
+        XCTAssertEqual(noTime?.action, .editPlan)
+
+        // Equal counts: the reason listed first in SkipReason wins.
+        h.weekReasons["2026-09-21"] = .forgot
+        XCTAssertEqual(h.reviewSuggestion(weekStart: day("2026-09-21"), today: day("2026-10-01"))?.title, "Добавить подсказку")
+    }
+
+    func testNoTimeWithBackupPlanSuggestsRealisticFrequency() {
+        var h = habit(.daily)
+        h.plan.backupPlan = "Утром"
+        for key in ["2026-09-21", "2026-09-22", "2026-09-23"] { h.setStatus(.full, onKey: key) }
+        for key in ["2026-09-24", "2026-09-25", "2026-09-26", "2026-09-27"] {
+            h.setStatus(.skipped, onKey: key, reason: .noTime)
+        }
+
+        let suggestion = h.reviewSuggestion(weekStart: day("2026-09-21"), today: day("2026-10-01"))
+        XCTAssertEqual(suggestion?.action, .changePeriodicity(.timesPerWeek(4)))
+    }
+
+    func testIncreaseIsOfferedAfterTwoFullWeeksAndNotRepeatedOnceApplied() {
+        var h = habit(.timesPerWeek(2))
+        for key in ["2026-09-21", "2026-09-23", "2026-09-28", "2026-09-30"] { h.setStatus(.full, onKey: key) }
+        let review = (weekStart: day("2026-09-28"), today: day("2026-10-04"))
+
+        let suggestion = h.reviewSuggestion(weekStart: review.weekStart, today: review.today)
+        XCTAssertEqual(suggestion?.action, .changePeriodicity(.timesPerWeek(3)))
+
+        h.setPeriodicity(.timesPerWeek(3), from: WeeklyReview.effectiveDateForChange(today: review.today))
+        XCTAssertEqual(h.periodicity, .timesPerWeek(3))
+        XCTAssertEqual(h.reviewSuggestion(weekStart: review.weekStart, today: review.today), suggestion)
+        XCTAssertEqual(h.weekProgress(containing: review.weekStart).planned, 2, "reviewed week keeps its plan")
+    }
+
+    func testUnwellSuggestsPause() {
+        var h = habit(.daily)
+        h.setStatus(.skipped, onKey: "2026-09-22", reason: .unwell)
+        XCTAssertEqual(h.reviewSuggestion(weekStart: day("2026-09-21"), today: day("2026-10-01"))?.action, .pause)
+    }
+
+    func testReviewWeekAndEffectiveDate() {
+        XCTAssertEqual(WeeklyReview.defaultWeekStart(today: day("2026-10-04")), day("2026-09-28"), "Sunday reviews its own week")
+        XCTAssertEqual(WeeklyReview.defaultWeekStart(today: day("2026-09-30")), day("2026-09-21"))
+        XCTAssertEqual(WeeklyReview.effectiveDateForChange(today: day("2026-09-30")), day("2026-10-05"))
+        XCTAssertEqual(WeeklyReview.effectiveDateForChange(today: day("2026-09-28")), day("2026-09-28"))
+    }
+
+    func testChangeFromTodayReplacesScheduledFutureVersion() {
+        var h = habit(.daily)
+        h.setPeriodicity(.timesPerWeek(3), from: day("2026-10-05"))
+        h.setPeriodicity(.timesPerWeek(5), from: day("2026-09-30"))
+
+        XCTAssertEqual(h.planHistory.map(\.periodicity), [.daily, .timesPerWeek(5)])
+        XCTAssertEqual(h.periodicity(onKey: "2026-10-01"), .timesPerWeek(5))
     }
 
     func testTimesPerWeekLabelUsesCorrectPlural() {

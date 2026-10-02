@@ -6,6 +6,18 @@ enum Periodicity: Codable, Hashable {
     case weekdays(Set<Int>)
     /// Flexible weekly quota without fixed days.
     case timesPerWeek(Int)
+
+    var label: String {
+        switch self {
+        case .daily:
+            return "Каждый день"
+        case .weekdays(let days):
+            if days.count == 7 { return "Каждый день" }
+            return days.sorted().map { Habit.weekdaySymbols[$0] }.joined(separator: ", ")
+        case .timesPerWeek(let count):
+            return Habit.timesPerWeekLabel(count)
+        }
+    }
 }
 
 /// What actually happened on a day. A day without an entry means "no data", not a confirmed miss.
@@ -102,6 +114,8 @@ struct Habit: Identifiable, Hashable {
     /// Day key ("yyyy-MM-dd") → what happened.
     var entries: [String: DayEntry]
     var pauses: [Pause]
+    /// Monday key → main obstacle named in the weekly review for days left without a record.
+    var weekReasons: [String: SkipReason]
 
     init(
         id: UUID = UUID(),
@@ -120,6 +134,7 @@ struct Habit: Identifiable, Hashable {
         self.planHistory = [PlanVersion(since: DayKey.key(for: createdAt), periodicity: periodicity)]
         self.entries = [:]
         self.pauses = []
+        self.weekReasons = [:]
     }
 
     static let weekdaySymbols = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
@@ -142,7 +157,13 @@ struct Habit: Identifiable, Hashable {
     mutating func setPeriodicity(_ periodicity: Periodicity, from date: Date = Date()) {
         guard periodicity != self.periodicity else { return }
         let key = DayKey.key(for: date)
-        if let last = planHistory.last, last.since >= key {
+        // A change from `date` supersedes versions scheduled to start later.
+        planHistory.removeAll { $0.since > key }
+        if planHistory.isEmpty {
+            planHistory = [PlanVersion(since: key, periodicity: periodicity)]
+            return
+        }
+        if let last = planHistory.last, last.since == key {
             planHistory[planHistory.count - 1].periodicity = periodicity
         } else {
             planHistory.append(PlanVersion(since: key, periodicity: periodicity))
@@ -154,15 +175,7 @@ struct Habit: Identifiable, Hashable {
     }
 
     var periodLabel: String {
-        switch periodicity {
-        case .daily:
-            return "Каждый день"
-        case .weekdays(let days):
-            if days.count == 7 { return "Каждый день" }
-            return days.sorted().map { Habit.weekdaySymbols[$0] }.joined(separator: ", ")
-        case .timesPerWeek(let count):
-            return Habit.timesPerWeekLabel(count)
-        }
+        periodicity.label
     }
 
     static func timesPerWeekLabel(_ count: Int) -> String {
@@ -244,7 +257,7 @@ struct Habit: Identifiable, Hashable {
 
 extension Habit: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, name, colorHex, createdAt, reminderMinutes, plan, planHistory, entries, pauses
+        case id, name, colorHex, createdAt, reminderMinutes, plan, planHistory, entries, pauses, weekReasons
         // v1 format
         case periodicity, completions
     }
@@ -258,6 +271,7 @@ extension Habit: Codable {
         reminderMinutes = try c.decodeIfPresent(Int.self, forKey: .reminderMinutes)
         plan = try c.decodeIfPresent(PlanDetails.self, forKey: .plan) ?? PlanDetails()
         pauses = try c.decodeIfPresent([Pause].self, forKey: .pauses) ?? []
+        weekReasons = try c.decodeIfPresent([String: SkipReason].self, forKey: .weekReasons) ?? [:]
 
         if let history = try c.decodeIfPresent([PlanVersion].self, forKey: .planHistory), !history.isEmpty {
             planHistory = history
@@ -285,6 +299,7 @@ extension Habit: Codable {
         try c.encode(planHistory, forKey: .planHistory)
         try c.encode(entries, forKey: .entries)
         try c.encode(pauses, forKey: .pauses)
+        try c.encode(weekReasons, forKey: .weekReasons)
     }
 }
 

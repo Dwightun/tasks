@@ -24,6 +24,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didReceive response: UNNotificationResponse
     ) async {
         let request = response.notification.request
+        if request.identifier == ReminderScheduler.weeklyReviewID {
+            await MainActor.run { AppRouter.shared.showWeeklyReview = true }
+            return
+        }
+
         let info = request.content.userInfo
         guard
             let action = ReminderScheduler.Action(rawValue: response.actionIdentifier),

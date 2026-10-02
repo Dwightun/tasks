@@ -16,6 +16,7 @@ enum ReminderScheduler {
     static let categoryWithMinimalID = "HABIT_REMINDER_MINIMAL"
     static let habitIDKey = "habitID"
     static let dayKey = "day"
+    static let weeklyReviewID = "weekly-review"
 
     private static let snoozeSuffix = "-snooze"
     private static let horizonDays = 14
@@ -103,8 +104,22 @@ enum ReminderScheduler {
             }
         }
 
-        for item in requests.sorted(by: { $0.fireDate < $1.fireDate }).prefix(maxPending) {
+        // One slot is reserved for the weekly review reminder.
+        for item in requests.sorted(by: { $0.fireDate < $1.fireDate }).prefix(maxPending - 1) {
             try? await center.add(item.request)
+        }
+
+        if ReviewSettings.isEnabled, !habits.isEmpty {
+            let content = UNMutableNotificationContent()
+            content.title = "Итоги недели"
+            content.body = "Две минуты: что получилось, что мешало и что поменять."
+            content.sound = .default
+            var time = DateComponents()
+            time.weekday = 1 // Sunday in the Gregorian calendar
+            time.hour = ReviewSettings.minutes / 60
+            time.minute = ReviewSettings.minutes % 60
+            let trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
+            try? await center.add(UNNotificationRequest(identifier: weeklyReviewID, content: content, trigger: trigger))
         }
     }
 
