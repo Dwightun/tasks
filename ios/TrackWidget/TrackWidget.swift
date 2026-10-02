@@ -87,7 +87,7 @@ struct HabitWidgetRow: View {
 
         Button(intent: ToggleHabitIntent(habitID: habit.id)) {
             HStack(spacing: 8) {
-                CheckCircle(color: Color(hex: habit.colorHex), done: done, size: 22)
+                CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: date)), size: 22)
                 Text(habit.name)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(done ? Color.secondary : Color.primary)
@@ -181,7 +181,7 @@ struct ActivityWidgetView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Button(intent: ToggleHabitIntent(habitID: habit.id)) {
-                    CheckCircle(color: Color(hex: habit.colorHex), done: habit.isCompleted(on: entry.date), size: 20)
+                    CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: entry.date)), size: 20)
                 }
                 .buttonStyle(.plain)
             }

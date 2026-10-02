@@ -10,6 +10,11 @@ struct WeekProgress: Equatable {
     var isMet: Bool { planned > 0 && completed >= planned }
 }
 
+struct ReturnPrompt: Equatable {
+    let missedDay: Date
+    let nextOpportunity: Date?
+}
+
 struct Streak: Equatable {
     enum Unit { case days, weeks }
 
@@ -130,6 +135,36 @@ extension Habit {
             day = next
         }
         return Streak(current: run, best: best, unit: .days)
+    }
+
+    /// Prompt to come back after a miss: the most recent due day before today passed without any record.
+    /// Weekly quotas are judged per week, so they don't get a day-level prompt.
+    func returnPrompt(today: Date = Date(), calendar: Calendar = .current, lookbackDays: Int = 7) -> ReturnPrompt? {
+        let todayStart = calendar.startOfDay(for: today)
+        let todayKey = DayKey.key(for: todayStart, calendar: calendar)
+        if case .timesPerWeek = periodicity(onKey: todayKey) { return nil }
+        guard !isPaused(onKey: todayKey), !isCompleted(onKey: todayKey) else { return nil }
+
+        for offset in 1...lookbackDays {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: todayStart) else { break }
+            let key = DayKey.key(for: day, calendar: calendar)
+            guard isDue(on: day, calendar: calendar), status(onKey: key) != .rest else { continue }
+            guard status(onKey: key) == nil else { return nil }
+            return ReturnPrompt(missedDay: day, nextOpportunity: nextOpportunity(from: todayStart, calendar: calendar))
+        }
+        return nil
+    }
+
+    /// Today if it's due and not yet done, otherwise the next due day within two weeks.
+    func nextOpportunity(from date: Date = Date(), calendar: Calendar = .current) -> Date? {
+        let start = calendar.startOfDay(for: date)
+        for offset in 0..<14 {
+            guard let day = calendar.date(byAdding: .day, value: offset, to: start) else { break }
+            if isDue(on: day, calendar: calendar), !isCompleted(on: day) {
+                return day
+            }
+        }
+        return nil
     }
 
     static func monday(of date: Date, calendar: Calendar = .current) -> Date {

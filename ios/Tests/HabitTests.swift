@@ -169,6 +169,84 @@ final class HabitTests: XCTestCase {
         XCTAssertEqual(h.status(onKey: "2026-09-28"), .full)
     }
 
+    func testSkipReasonIsKeptOnlyForSkippedDays() {
+        var h = habit(.daily)
+        h.setStatus(.skipped, onKey: "2026-09-28", reason: .noTime)
+        h.setStatus(.rest, onKey: "2026-09-29", reason: .noTime)
+
+        XCTAssertEqual(h.entries["2026-09-28"]?.reason, .noTime)
+        XCTAssertNil(h.entries["2026-09-29"]?.reason)
+    }
+
+    // MARK: Return after a miss
+
+    func testReturnPromptAfterUnrecordedDueDay() {
+        var h = habit(.daily)
+        h.setStatus(.full, onKey: "2026-09-28")
+
+        let prompt = h.returnPrompt(today: day("2026-09-30"))
+        XCTAssertEqual(prompt, ReturnPrompt(missedDay: day("2026-09-29"), nextOpportunity: day("2026-09-30")))
+    }
+
+    func testReturnPromptPointsToNextScheduledDay() {
+        var h = habit(.weekdays([0, 2]))
+        h.setStatus(.full, onKey: "2026-09-28")
+
+        let prompt = h.returnPrompt(today: day("2026-10-01"))
+        XCTAssertEqual(prompt?.missedDay, day("2026-09-30"))
+        XCTAssertEqual(prompt?.nextOpportunity, day("2026-10-05"))
+    }
+
+    func testNoReturnPromptOnceMissIsExplainedOrHandled() {
+        var h = habit(.daily)
+        h.setStatus(.full, onKey: "2026-09-28")
+
+        var explained = h
+        explained.setStatus(.skipped, onKey: "2026-09-29", reason: .forgot)
+        XCTAssertNil(explained.returnPrompt(today: day("2026-09-30")))
+
+        var rested = h
+        rested.setStatus(.rest, onKey: "2026-09-29")
+        XCTAssertNil(rested.returnPrompt(today: day("2026-09-30")))
+
+        var doneToday = h
+        doneToday.setStatus(.minimal, onKey: "2026-09-30")
+        XCTAssertNil(doneToday.returnPrompt(today: day("2026-09-30")))
+
+        var paused = h
+        paused.startPause(.sick, from: day("2026-09-30"), until: nil)
+        XCTAssertNil(paused.returnPrompt(today: day("2026-09-30")))
+
+        XCTAssertNil(habit(.timesPerWeek(3)).returnPrompt(today: day("2026-09-30")))
+    }
+
+    // MARK: Pauses
+
+    func testEndingPauseKeepsPastDaysPaused() {
+        var h = habit(.daily)
+        h.startPause(.travel, from: day("2026-09-25"), until: nil)
+        h.endPause(on: day("2026-09-30"))
+
+        XCTAssertTrue(h.isPaused(onKey: "2026-09-29"))
+        XCTAssertFalse(h.isPaused(onKey: "2026-09-30"))
+    }
+
+    func testEndingPauseStartedTodayRemovesIt() {
+        var h = habit(.daily)
+        h.startPause(.rest, from: day("2026-09-30"), until: day("2026-10-03"))
+        h.endPause(on: day("2026-09-30"))
+
+        XCTAssertTrue(h.pauses.isEmpty)
+    }
+
+    func testStartingPauseReplacesOverlappingOne() {
+        var h = habit(.daily)
+        h.startPause(.rest, from: day("2026-09-28"), until: day("2026-10-05"))
+        h.startPause(.sick, from: day("2026-09-30"), until: day("2026-10-02"))
+
+        XCTAssertEqual(h.pauses, [Pause(kind: .sick, start: "2026-09-30", end: "2026-10-02")])
+    }
+
     func testTimesPerWeekLabelUsesCorrectPlural() {
         XCTAssertEqual(Habit.timesPerWeekLabel(1), "1 раз в неделю")
         XCTAssertEqual(Habit.timesPerWeekLabel(3), "3 раза в неделю")

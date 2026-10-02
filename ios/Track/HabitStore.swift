@@ -52,6 +52,24 @@ final class HabitStore: ObservableObject {
         persist()
     }
 
+    func setStatus(_ id: UUID, _ status: DayStatus?, on date: Date, reason: SkipReason? = nil) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index].setStatus(status, onKey: DayKey.key(for: date), reason: reason)
+        persist()
+    }
+
+    func startPause(_ id: UUID, kind: Pause.Kind, until end: Date?) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index].startPause(kind, until: end)
+        persist()
+    }
+
+    func endPause(_ id: UUID) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index].endPause()
+        persist()
+    }
+
     func rescheduleReminders() {
         let snapshot = habits
         Task { await ReminderScheduler.reschedule(snapshot) }

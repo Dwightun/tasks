@@ -24,6 +24,18 @@ enum SkipReason: String, Codable, CaseIterable {
     case circumstances
     case unwell
     case other
+
+    var title: String {
+        switch self {
+        case .forgot: return "Забыл"
+        case .noTime: return "Не было времени"
+        case .tooHard: return "Трудно начать"
+        case .notEnjoyable: return "Не хотелось"
+        case .circumstances: return "Изменились обстоятельства"
+        case .unwell: return "Плохое самочувствие"
+        case .other: return "Другое"
+        }
+    }
 }
 
 struct DayEntry: Codable, Hashable {
@@ -57,6 +69,14 @@ struct Pause: Codable, Hashable {
         case rest
         case sick
         case travel
+
+        var title: String {
+            switch self {
+            case .rest: return "Отдых"
+            case .sick: return "Болезнь"
+            case .travel: return "Поездка"
+            }
+        }
     }
 
     var kind: Kind
@@ -173,11 +193,33 @@ struct Habit: Identifiable, Hashable {
         pauses.contains { $0.contains(key) }
     }
 
-    mutating func setStatus(_ status: DayStatus?, onKey key: String) {
+    mutating func setStatus(_ status: DayStatus?, onKey key: String, reason: SkipReason? = nil) {
         if let status {
-            entries[key] = DayEntry(status: status)
+            entries[key] = DayEntry(status: status, reason: status == .skipped ? reason : nil)
         } else {
             entries.removeValue(forKey: key)
+        }
+    }
+
+    func activePause(on date: Date) -> Pause? {
+        let key = DayKey.key(for: date)
+        return pauses.last(where: { $0.contains(key) })
+    }
+
+    mutating func startPause(_ kind: Pause.Kind, from date: Date = Date(), until end: Date?) {
+        let startKey = DayKey.key(for: date)
+        pauses.removeAll { $0.contains(startKey) || $0.start > startKey }
+        pauses.append(Pause(kind: kind, start: startKey, end: end.map { DayKey.key(for: $0) }))
+    }
+
+    /// Ends the pause covering `date` so that `date` itself counts again.
+    mutating func endPause(on date: Date = Date(), calendar: Calendar = .current) {
+        let key = DayKey.key(for: date, calendar: calendar)
+        guard let index = pauses.lastIndex(where: { $0.contains(key) }) else { return }
+        if pauses[index].start >= key {
+            pauses.remove(at: index)
+        } else if let yesterday = calendar.date(byAdding: .day, value: -1, to: date) {
+            pauses[index].end = DayKey.key(for: yesterday, calendar: calendar)
         }
     }
 

@@ -15,6 +15,7 @@ struct HabitEditor: View {
     @State private var reminderOn: Bool
     @State private var reminderTime: Date
     @State private var notificationsDenied = false
+    @State private var planExpanded: Bool
     private let isNew: Bool
 
     static let palette = ["#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#38D9A9", "#4DABF7", "#748FFC", "#DA77F2"]
@@ -39,6 +40,7 @@ struct HabitEditor: View {
         _scheduleKind = State(initialValue: kind)
         _weekdays = State(initialValue: days)
         _timesPerWeek = State(initialValue: perWeek)
+        _planExpanded = State(initialValue: initial.plan != PlanDetails())
         let minutes = initial.reminderMinutes ?? 9 * 60
         _reminderOn = State(initialValue: initial.reminderMinutes != nil)
         _reminderTime = State(initialValue: Calendar.current.date(
@@ -91,6 +93,20 @@ struct HabitEditor: View {
                     } else if !isNew {
                         Text("Изменение расписания действует с сегодняшнего дня; прошлые недели считаются по старому плану.")
                     }
+                }
+
+                Section {
+                    DisclosureGroup("Уточнить план", isExpanded: $planExpanded) {
+                        planField("Зачем это мне", \.purpose, example: "Легче переключаться после работы")
+                        planField("После чего начинаю", \.cue, example: "Закрыл рабочий ноутбук")
+                        planField("Первый шаг", \.firstStep, example: "Надеть кроссовки")
+                        planField("Минимальная версия", \.minimalVersion, example: "Короткий круг вокруг дома")
+                        planField("Если помешает…", \.obstacle, example: "Задержался на работе")
+                        planField("…то сделаю", \.backupPlan, example: "Прогулка завтра утром")
+                        planField("Подготовка", \.preparation, example: "Обувь у двери с вечера")
+                    }
+                } footer: {
+                    Text("Всё необязательно. Конкретный план помогает начать, запасной вариант — вернуться после сбоя.")
                 }
 
                 Section {
@@ -178,6 +194,23 @@ struct HabitEditor: View {
         .buttonStyle(.borderless)
     }
 
+    private func planField(_ title: String, _ keyPath: WritableKeyPath<PlanDetails, String?>, example: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+            TextField(
+                example,
+                text: Binding(
+                    get: { draft.plan[keyPath: keyPath] ?? "" },
+                    set: { draft.plan[keyPath: keyPath] = $0.isEmpty ? nil : $0 }
+                ),
+                axis: .vertical
+            )
+        }
+        .padding(.vertical, 2)
+    }
+
     private func checkNotificationPermission() async {
         let granted = await ReminderScheduler.requestAuthorization()
         notificationsDenied = !granted
@@ -185,6 +218,13 @@ struct HabitEditor: View {
 
     private func save() {
         draft.name = trimmedName
+        let planKeys: [WritableKeyPath<PlanDetails, String?>] = [
+            \.purpose, \.cue, \.firstStep, \.minimalVersion, \.obstacle, \.backupPlan, \.preparation,
+        ]
+        for keyPath in planKeys {
+            let trimmed = draft.plan[keyPath: keyPath]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            draft.plan[keyPath: keyPath] = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        }
         let periodicity: Periodicity
         switch scheduleKind {
         case .daily:

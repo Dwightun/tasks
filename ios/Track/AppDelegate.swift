@@ -8,7 +8,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
-        ReminderScheduler.registerCategory()
+        ReminderScheduler.registerCategories()
         return true
     }
 
@@ -23,15 +23,29 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         _ center: UNUserNotificationCenter,
         didReceive response: UNNotificationResponse
     ) async {
-        let info = response.notification.request.content.userInfo
+        let request = response.notification.request
+        let info = request.content.userInfo
         guard
-            response.actionIdentifier == ReminderScheduler.doneActionID,
+            let action = ReminderScheduler.Action(rawValue: response.actionIdentifier),
             let idString = info[ReminderScheduler.habitIDKey] as? String,
             let id = UUID(uuidString: idString)
         else { return }
 
+        if action == .snooze {
+            await ReminderScheduler.snooze(request)
+            return
+        }
+
+        let status: DayStatus
+        switch action {
+        case .done: status = .full
+        case .minimal: status = .minimal
+        case .rest: status = .rest
+        case .snooze: return
+        }
+
         let day = info[ReminderScheduler.dayKey] as? String ?? DayKey.key(for: Date())
-        let habits = HabitStorage.update(habitID: id) { $0.setStatus(.full, onKey: day) }
+        let habits = HabitStorage.update(habitID: id) { $0.setStatus(status, onKey: day) }
         WidgetCenter.shared.reloadAllTimelines()
         await MainActor.run {
             NotificationCenter.default.post(name: .habitsChangedExternally, object: nil)

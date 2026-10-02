@@ -4,6 +4,7 @@ import SwiftUI
 struct MonthCalendar: View {
     let habit: Habit
     let onToggle: (Date) -> Void
+    let onSetStatus: (Date, DayStatus?, SkipReason?) -> Void
 
     @State private var monthStart = MonthCalendar.startOfMonth(Date())
 
@@ -103,6 +104,13 @@ struct MonthCalendar: View {
         }
         .buttonStyle(.plain)
         .disabled(isFuture)
+        .contextMenu {
+            if !isFuture {
+                StatusMenuItems(habit: habit, current: status) { newStatus, reason in
+                    onSetStatus(date, newStatus, reason)
+                }
+            }
+        }
     }
 
     private func shift(by months: Int) {
