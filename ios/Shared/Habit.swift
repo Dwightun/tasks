@@ -4,19 +4,103 @@ enum Periodicity: Codable, Hashable {
     case daily
     /// Monday-first weekday indexes: 0 = Monday ... 6 = Sunday.
     case weekdays(Set<Int>)
+    /// Flexible weekly quota without fixed days.
+    case timesPerWeek(Int)
 }
 
-struct Habit: Codable, Identifiable, Hashable {
-    var id: UUID = UUID()
+/// What actually happened on a day. A day without an entry means "no data", not a confirmed miss.
+enum DayStatus: String, Codable, CaseIterable {
+    case full
+    case minimal
+    case rest
+    case skipped
+}
+
+enum SkipReason: String, Codable, CaseIterable {
+    case forgot
+    case noTime
+    case tooHard
+    case notEnjoyable
+    case circumstances
+    case unwell
+    case other
+}
+
+struct DayEntry: Codable, Hashable {
+    var status: DayStatus
+    var reason: SkipReason?
+    var note: String?
+}
+
+/// Optional plan details; every field may stay empty.
+struct PlanDetails: Codable, Hashable {
+    var purpose: String?
+    var cue: String?
+    var firstStep: String?
+    var minimalVersion: String?
+    var obstacle: String?
+    var backupPlan: String?
+    var preparation: String?
+}
+
+/// Schedule in effect from `since` (inclusive), so lowering the goal doesn't rewrite past weeks.
+struct PlanVersion: Codable, Hashable {
+    /// Applies to all history recorded before plan versioning existed.
+    static let beginning = "0000-01-01"
+
+    var since: String
+    var periodicity: Periodicity
+}
+
+struct Pause: Codable, Hashable {
+    enum Kind: String, Codable, CaseIterable {
+        case rest
+        case sick
+        case travel
+    }
+
+    var kind: Kind
+    /// Inclusive day keys; nil end means open-ended.
+    var start: String
+    var end: String?
+
+    func contains(_ key: String) -> Bool {
+        key >= start && (end.map { key <= $0 } ?? true)
+    }
+}
+
+struct Habit: Identifiable, Hashable {
+    var id: UUID
     var name: String
     var colorHex: String
-    var periodicity: Periodicity = .daily
-    /// Completed days as "yyyy-MM-dd" keys in the local calendar.
-    var completions: Set<String> = []
-    var createdAt: Date = Date()
-    // New fields must stay optional: synthesized Codable can't fill defaults when decoding older saved data.
+    var createdAt: Date
     /// Reminder time as minutes since midnight; nil means no reminder.
     var reminderMinutes: Int?
+    var plan: PlanDetails
+    /// Never empty; the last element is the current plan.
+    var planHistory: [PlanVersion]
+    /// Day key ("yyyy-MM-dd") → what happened.
+    var entries: [String: DayEntry]
+    var pauses: [Pause]
+
+    init(
+        id: UUID = UUID(),
+        name: String,
+        colorHex: String,
+        periodicity: Periodicity = .daily,
+        createdAt: Date = Date(),
+        reminderMinutes: Int? = nil
+    ) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.createdAt = createdAt
+        self.reminderMinutes = reminderMinutes
+        self.plan = PlanDetails()
+        self.planHistory = [PlanVersion(since: DayKey.key(for: createdAt), periodicity: periodicity)]
+        self.entries = [:]
+        self.pauses = []
+    }
 
     static let weekdaySymbols = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
 
@@ -24,30 +108,28 @@ struct Habit: Codable, Identifiable, Hashable {
         (calendar.component(.weekday, from: date) + 5) % 7
     }
 
-    func isDue(on date: Date, calendar: Calendar = .current) -> Bool {
-        switch periodicity {
-        case .daily:
-            return true
-        case .weekdays(let days):
-            return days.contains(Habit.mondayIndex(of: date, calendar: calendar))
-        }
+    // MARK: Plan
+
+    var periodicity: Periodicity {
+        planHistory.last?.periodicity ?? .daily
     }
 
-    func isDone(on date: Date) -> Bool {
-        completions.contains(DayKey.key(for: date))
+    func periodicity(onKey key: String) -> Periodicity {
+        (planHistory.last(where: { $0.since <= key }) ?? planHistory.first)?.periodicity ?? .daily
     }
 
-    var isDoneToday: Bool { isDone(on: Date()) }
-
-    mutating func toggle(on date: Date = Date()) {
-        setDone(!isDone(on: date), dayKey: DayKey.key(for: date))
-    }
-
-    mutating func setDone(_ done: Bool, dayKey: String) {
-        if done {
-            completions.insert(dayKey)
+    /// Changes the schedule from `date` on, keeping earlier weeks judged by the plan they had.
+    mutating func setPeriodicity(_ periodicity: Periodicity, from date: Date = Date()) {
+        guard periodicity != self.periodicity else { return }
+        let key = DayKey.key(for: date)
+        if let last = planHistory.last, last.since >= key {
+            planHistory[planHistory.count - 1].periodicity = periodicity
         } else {
-            completions.remove(dayKey)
+            planHistory.append(PlanVersion(since: key, periodicity: periodicity))
+        }
+        // Undoing a same-day change shouldn't leave a duplicate version behind.
+        if planHistory.count >= 2, planHistory[planHistory.count - 2].periodicity == periodicity {
+            planHistory.removeLast()
         }
     }
 
@@ -58,50 +140,109 @@ struct Habit: Codable, Identifiable, Hashable {
         case .weekdays(let days):
             if days.count == 7 { return "Каждый день" }
             return days.sorted().map { Habit.weekdaySymbols[$0] }.joined(separator: ", ")
+        case .timesPerWeek(let count):
+            return Habit.timesPerWeekLabel(count)
         }
+    }
+
+    static func timesPerWeekLabel(_ count: Int) -> String {
+        let word = (2...4).contains(count % 10) && !(12...14).contains(count % 100) ? "раза" : "раз"
+        return "\(count) \(word) в неделю"
     }
 
     var reminderLabel: String? {
         reminderMinutes.map { String(format: "%02d:%02d", $0 / 60, $0 % 60) }
     }
 
-    func currentStreak(today: Date = Date(), calendar: Calendar = .current) -> Int {
-        var streak = 0
-        var cursor = calendar.startOfDay(for: today)
-        // Today not done yet shouldn't break the streak.
-        if isDue(on: cursor, calendar: calendar) && !isDone(on: cursor) {
-            cursor = calendar.date(byAdding: .day, value: -1, to: cursor)!
-        }
-        for _ in 0..<3650 {
-            if isDue(on: cursor, calendar: calendar) {
-                guard isDone(on: cursor) else { break }
-                streak += 1
-            }
-            cursor = calendar.date(byAdding: .day, value: -1, to: cursor)!
-        }
-        return streak
+    // MARK: Days
+
+    func status(onKey key: String) -> DayStatus? {
+        entries[key]?.status
     }
 
-    func bestStreak(today: Date = Date(), calendar: Calendar = .current) -> Int {
-        guard let firstKey = completions.min(), let first = DayKey.date(from: firstKey, calendar: calendar) else {
-            return 0
+    func isCompleted(onKey key: String) -> Bool {
+        let dayStatus = self.status(onKey: key)
+        return dayStatus == .full || dayStatus == .minimal
+    }
+
+    func isCompleted(on date: Date) -> Bool {
+        isCompleted(onKey: DayKey.key(for: date))
+    }
+
+    func isPaused(onKey key: String) -> Bool {
+        pauses.contains { $0.contains(key) }
+    }
+
+    mutating func setStatus(_ status: DayStatus?, onKey key: String) {
+        if let status {
+            entries[key] = DayEntry(status: status)
+        } else {
+            entries.removeValue(forKey: key)
         }
-        let end = calendar.startOfDay(for: today)
-        var cursor = max(first, calendar.date(byAdding: .day, value: -3650, to: end) ?? first)
-        var best = 0
-        var run = 0
-        while cursor <= end {
-            if isDue(on: cursor, calendar: calendar) {
-                if isDone(on: cursor) {
-                    run += 1
-                    best = max(best, run)
-                } else if cursor < end {
-                    run = 0
-                }
-            }
-            cursor = calendar.date(byAdding: .day, value: 1, to: cursor)!
+    }
+
+    /// One-tap logging: a completed day is cleared, anything else becomes a full completion.
+    mutating func toggle(on date: Date = Date()) {
+        let key = DayKey.key(for: date)
+        setStatus(isCompleted(onKey: key) ? nil : .full, onKey: key)
+    }
+
+    var totalCompleted: Int {
+        entries.values.filter { $0.status == .full || $0.status == .minimal }.count
+    }
+
+    /// First day that counts for statistics: creation, or an earlier retroactive mark.
+    var startKey: String {
+        let created = DayKey.key(for: createdAt)
+        return entries.keys.min().map { min($0, created) } ?? created
+    }
+}
+
+// MARK: - Codable
+
+extension Habit: Codable {
+    private enum CodingKeys: String, CodingKey {
+        case id, name, colorHex, createdAt, reminderMinutes, plan, planHistory, entries, pauses
+        // v1 format
+        case periodicity, completions
+    }
+
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(UUID.self, forKey: .id)
+        name = try c.decode(String.self, forKey: .name)
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "#38D9A9"
+        createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        reminderMinutes = try c.decodeIfPresent(Int.self, forKey: .reminderMinutes)
+        plan = try c.decodeIfPresent(PlanDetails.self, forKey: .plan) ?? PlanDetails()
+        pauses = try c.decodeIfPresent([Pause].self, forKey: .pauses) ?? []
+
+        if let history = try c.decodeIfPresent([PlanVersion].self, forKey: .planHistory), !history.isEmpty {
+            planHistory = history
+        } else {
+            let legacy = try c.decodeIfPresent(Periodicity.self, forKey: .periodicity) ?? .daily
+            planHistory = [PlanVersion(since: PlanVersion.beginning, periodicity: legacy)]
         }
-        return best
+
+        if let entries = try c.decodeIfPresent([String: DayEntry].self, forKey: .entries) {
+            self.entries = entries
+        } else {
+            let legacy = try c.decodeIfPresent(Set<String>.self, forKey: .completions) ?? []
+            self.entries = Dictionary(uniqueKeysWithValues: legacy.map { ($0, DayEntry(status: .full)) })
+        }
+    }
+
+    func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(id, forKey: .id)
+        try c.encode(name, forKey: .name)
+        try c.encode(colorHex, forKey: .colorHex)
+        try c.encode(createdAt, forKey: .createdAt)
+        try c.encodeIfPresent(reminderMinutes, forKey: .reminderMinutes)
+        try c.encode(plan, forKey: .plan)
+        try c.encode(planHistory, forKey: .planHistory)
+        try c.encode(entries, forKey: .entries)
+        try c.encode(pauses, forKey: .pauses)
     }
 }
 

@@ -13,7 +13,15 @@ enum HabitStorage {
 
     static func load() -> [Habit] {
         guard let data = try? Data(contentsOf: fileURL) else { return [] }
-        return (try? JSONDecoder().decode([Habit].self, from: data)) ?? []
+        do {
+            return try JSONDecoder().decode([Habit].self, from: data)
+        } catch {
+            // Keep the unreadable file: the next save would otherwise overwrite it with an empty list.
+            let backup = fileURL.deletingLastPathComponent()
+                .appendingPathComponent("habits-unreadable-\(Int(Date().timeIntervalSince1970)).json")
+            try? data.write(to: backup)
+            return []
+        }
     }
 
     static func save(_ habits: [Habit]) {

@@ -62,8 +62,15 @@ struct MonthCalendar: View {
         let calendar = Calendar.current
         let isFuture = date > today
         let isToday = calendar.isDate(date, inSameDayAs: today)
-        let done = habit.isDone(on: date)
-        let due = habit.isDue(on: date, calendar: calendar)
+        let key = DayKey.key(for: date, calendar: calendar)
+        let status = habit.status(onKey: key)
+        let paused = habit.isPaused(onKey: key)
+        let highlighted: Bool
+        if case .timesPerWeek = habit.periodicity(onKey: key) {
+            highlighted = !paused
+        } else {
+            highlighted = habit.isDue(on: date, calendar: calendar)
+        }
         let color = Color(hex: habit.colorHex)
 
         return Button {
@@ -71,17 +78,23 @@ struct MonthCalendar: View {
         } label: {
             Text("\(calendar.component(.day, from: date))")
                 .font(.subheadline.weight(isToday ? .bold : .regular))
-                .foregroundStyle(done ? Color.white : (due ? Color.primary : Color.secondary))
+                .foregroundStyle(status == .full ? Color.white : (highlighted ? Color.primary : Color.secondary))
                 .frame(maxWidth: .infinity, minHeight: 36)
                 .background {
-                    if done {
+                    if status == .full {
                         Circle().fill(color)
+                    } else if status == .minimal {
+                        Circle().fill(color.opacity(0.4))
+                    } else if status == .rest {
+                        Circle().fill(Color.secondary.opacity(0.15))
+                    } else if status == .skipped {
+                        Circle().strokeBorder(Color.secondary.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [3, 3]))
                     } else if isToday {
                         Circle().strokeBorder(color, lineWidth: 1.5)
                     }
                 }
                 .contentShape(Rectangle())
-                .opacity(isFuture ? 0.3 : 1)
+                .opacity(isFuture ? 0.3 : (paused ? 0.45 : 1))
         }
         .buttonStyle(.plain)
         .disabled(isFuture)

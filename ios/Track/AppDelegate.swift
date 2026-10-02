@@ -31,7 +31,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         else { return }
 
         let day = info[ReminderScheduler.dayKey] as? String ?? DayKey.key(for: Date())
-        let habits = HabitStorage.update(habitID: id) { $0.setDone(true, dayKey: day) }
+        let habits = HabitStorage.update(habitID: id) { $0.setStatus(.full, onKey: day) }
         WidgetCenter.shared.reloadAllTimelines()
         await MainActor.run {
             NotificationCenter.default.post(name: .habitsChangedExternally, object: nil)

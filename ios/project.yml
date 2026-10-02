@@ -9,7 +9,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.2.0"
+    MARKETING_VERSION: "0.3.0"
     CURRENT_PROJECT_VERSION: "1"
     TARGETED_DEVICE_FAMILY: "1"
     CODE_SIGN_STYLE: Automatic
@@ -53,7 +53,21 @@ targets:
           PROVISIONING_PROFILE_SPECIFIER: Track AppStore
     dependencies:
       - target: TrackWidget
-    scheme: {}
+    scheme:
+      testTargets:
+        - TrackTests
+
+  # Logic tests compile the shared sources directly, so they need no host app.
+  TrackTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: Tests
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.dwightun.track.tests
+        GENERATE_INFOPLIST_FILE: YES
 
   TrackWidget:
     type: app-extension

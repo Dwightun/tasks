@@ -6,7 +6,7 @@ struct HabitRow: View {
     let onToggle: () -> Void
 
     var body: some View {
-        let done = habit.isDoneToday
+        let done = habit.isCompleted(on: Date())
 
         // Two sibling buttons rather than nested ones, so a tap on the circle never opens the details.
         HStack(spacing: 14) {
@@ -42,9 +42,9 @@ struct HabitRow: View {
 
     private var subtitle: String {
         var parts = [habit.periodLabel]
+        let week = habit.weekProgress(containing: Date())
+        if week.planned > 0 { parts.append("\(week.completed)/\(week.planned) за неделю") }
         if let time = habit.reminderLabel { parts.append("🔔 \(time)") }
-        let streak = habit.currentStreak()
-        if streak > 0 { parts.append("серия \(streak) 🔥") }
         return parts.joined(separator: " · ")
     }
 }

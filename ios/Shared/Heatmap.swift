@@ -19,7 +19,7 @@ enum Heatmap {
     static func combinedFill(for habits: [Habit]) -> (String) -> Color {
         var counts: [String: Int] = [:]
         for habit in habits {
-            for key in habit.completions {
+            for (key, entry) in habit.entries where entry.status == .full || entry.status == .minimal {
                 counts[key, default: 0] += 1
             }
         }
@@ -33,10 +33,17 @@ enum Heatmap {
         }
     }
 
-    /// Single habit: its own color on completed days.
+    /// Single habit: full color for a full completion, lighter for the minimal version.
     static func habitFill(for habit: Habit) -> (String) -> Color {
         let color = Color(hex: habit.colorHex)
-        return { key in habit.completions.contains(key) ? color : emptyFill }
+        return { key in
+            switch habit.status(onKey: key) {
+            case .full: return color
+            case .minimal: return color.opacity(0.45)
+            case .rest: return Color.secondary.opacity(0.3)
+            case .skipped, nil: return habit.isPaused(onKey: key) ? emptyFill.opacity(0.4) : emptyFill
+            }
+        }
     }
 }
 

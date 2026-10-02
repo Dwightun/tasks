@@ -47,15 +47,17 @@ enum ReminderScheduler {
                     let day = calendar.date(byAdding: .day, value: offset, to: today),
                     let fireDate = calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: day),
                     fireDate > now,
-                    habit.isDue(on: day, calendar: calendar),
-                    !habit.isDone(on: day)
+                    habit.isPlanned(on: day, calendar: calendar),
+                    habit.status(onKey: DayKey.key(for: day, calendar: calendar)) == nil
                 else { continue }
 
                 let key = DayKey.key(for: day, calendar: calendar)
                 let content = UNMutableNotificationContent()
                 content.title = habit.name
-                let streak = offset == 0 ? habit.currentStreak(today: now, calendar: calendar) : 0
-                content.body = streak > 0 ? "Серия \(streak) — не прерывай 🔥" : "Отметь, когда выполнишь"
+                let week = habit.weekProgress(containing: day, calendar: calendar)
+                content.body = week.planned > 0
+                    ? "На этой неделе \(week.completed) из \(week.planned). Отметь, когда выполнишь"
+                    : "Отметь, когда выполнишь"
                 content.sound = .default
                 content.categoryIdentifier = categoryID
                 content.threadIdentifier = habit.id.uuidString

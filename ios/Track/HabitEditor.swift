@@ -4,9 +4,14 @@ struct HabitEditor: View {
     @EnvironmentObject private var store: HabitStore
     @Environment(\.dismiss) private var dismiss
 
+    private enum ScheduleKind: Hashable {
+        case daily, weekdays, perWeek
+    }
+
     @State private var draft: Habit
-    @State private var usesWeekdays: Bool
+    @State private var scheduleKind: ScheduleKind
     @State private var weekdays: Set<Int>
+    @State private var timesPerWeek: Int
     @State private var reminderOn: Bool
     @State private var reminderTime: Date
     @State private var notificationsDenied = false
@@ -18,13 +23,22 @@ struct HabitEditor: View {
         let initial = habit ?? Habit(name: "", colorHex: HabitEditor.palette.randomElement() ?? "#38D9A9")
         _draft = State(initialValue: initial)
         isNew = habit == nil
-        if case .weekdays(let days) = initial.periodicity {
-            _usesWeekdays = State(initialValue: true)
-            _weekdays = State(initialValue: days)
-        } else {
-            _usesWeekdays = State(initialValue: false)
-            _weekdays = State(initialValue: [0, 1, 2, 3, 4])
+        var kind = ScheduleKind.daily
+        var days: Set<Int> = [0, 1, 2, 3, 4]
+        var perWeek = 3
+        switch initial.periodicity {
+        case .daily:
+            break
+        case .weekdays(let selected):
+            kind = .weekdays
+            days = selected
+        case .timesPerWeek(let count):
+            kind = .perWeek
+            perWeek = count
         }
+        _scheduleKind = State(initialValue: kind)
+        _weekdays = State(initialValue: days)
+        _timesPerWeek = State(initialValue: perWeek)
         let minutes = initial.reminderMinutes ?? 9 * 60
         _reminderOn = State(initialValue: initial.reminderMinutes != nil)
         _reminderTime = State(initialValue: Calendar.current.date(
@@ -52,19 +66,30 @@ struct HabitEditor: View {
                     .padding(.vertical, 6)
                 }
 
-                Section("Периодичность") {
-                    Picker("Периодичность", selection: $usesWeekdays) {
-                        Text("Каждый день").tag(false)
-                        Text("Дни недели").tag(true)
+                Section {
+                    Picker("Периодичность", selection: $scheduleKind) {
+                        Text("Каждый день").tag(ScheduleKind.daily)
+                        Text("Дни недели").tag(ScheduleKind.weekdays)
+                        Text("N в неделю").tag(ScheduleKind.perWeek)
                     }
                     .pickerStyle(.segmented)
 
-                    if usesWeekdays {
+                    if scheduleKind == .weekdays {
                         HStack(spacing: 6) {
                             ForEach(0..<7, id: \.self) { index in
                                 weekdayChip(index)
                             }
                         }
+                    } else if scheduleKind == .perWeek {
+                        Stepper(Habit.timesPerWeekLabel(timesPerWeek), value: $timesPerWeek, in: 1...6)
+                    }
+                } header: {
+                    Text("Периодичность")
+                } footer: {
+                    if scheduleKind == .perWeek {
+                        Text("В любые дни недели. Привычка видна в виджете, пока недельный план не выполнен.")
+                    } else if !isNew {
+                        Text("Изменение расписания действует с сегодняшнего дня; прошлые недели считаются по старому плану.")
                     }
                 }
 
@@ -160,7 +185,16 @@ struct HabitEditor: View {
 
     private func save() {
         draft.name = trimmedName
-        draft.periodicity = (usesWeekdays && !weekdays.isEmpty) ? .weekdays(weekdays) : .daily
+        let periodicity: Periodicity
+        switch scheduleKind {
+        case .daily:
+            periodicity = .daily
+        case .weekdays:
+            periodicity = weekdays.isEmpty ? .daily : .weekdays(weekdays)
+        case .perWeek:
+            periodicity = .timesPerWeek(timesPerWeek)
+        }
+        draft.setPeriodicity(periodicity)
         if reminderOn {
             let time = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
             draft.reminderMinutes = (time.hour ?? 9) * 60 + (time.minute ?? 0)

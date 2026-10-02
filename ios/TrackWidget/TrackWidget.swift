@@ -35,7 +35,7 @@ struct HabitListProvider: AppIntentTimelineProvider {
         let all = HabitStorage.load()
         let selectedIDs = (configuration.habits ?? []).map(\.id)
         let habits = selectedIDs.isEmpty
-            ? all.filter { $0.isDue(on: now) }
+            ? all.filter { $0.isPlanned(on: now) }
             : selectedIDs.compactMap { id in all.first { $0.id.uuidString == id } }
         return HabitListEntry(date: now, habits: habits)
     }
@@ -83,7 +83,7 @@ struct HabitWidgetRow: View {
     let date: Date
 
     var body: some View {
-        let done = habit.isDone(on: date)
+        let done = habit.isCompleted(on: date)
 
         Button(intent: ToggleHabitIntent(habitID: habit.id)) {
             HStack(spacing: 8) {
@@ -181,13 +181,13 @@ struct ActivityWidgetView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Button(intent: ToggleHabitIntent(habitID: habit.id)) {
-                    CheckCircle(color: Color(hex: habit.colorHex), done: habit.isDone(on: entry.date), size: 20)
+                    CheckCircle(color: Color(hex: habit.colorHex), done: habit.isCompleted(on: entry.date), size: 20)
                 }
                 .buttonStyle(.plain)
             }
         } else {
-            let due = entry.habits.filter { $0.isDue(on: entry.date) }
-            let done = due.filter { $0.isDone(on: entry.date) }.count
+            let due = entry.habits.filter { $0.isPlanned(on: entry.date) }
+            let done = due.filter { $0.isCompleted(on: entry.date) }.count
             HStack(spacing: 6) {
                 Text("Все привычки")
                     .font(.caption.weight(.semibold))

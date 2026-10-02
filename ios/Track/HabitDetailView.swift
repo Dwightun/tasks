@@ -18,10 +18,13 @@ struct HabitDetailView: View {
                         .font(.subheadline)
                         .foregroundStyle(Color.secondary)
 
+                    weekTile(habit.weekProgress(containing: Date()))
+
+                    let streak = habit.streak()
                     HStack(spacing: 10) {
-                        statTile(value: habit.currentStreak(), label: "Серия")
-                        statTile(value: habit.bestStreak(), label: "Рекорд")
-                        statTile(value: habit.completions.count, label: "Всего")
+                        statTile(value: "\(streak.current)", label: streakLabel("Серия", streak.unit))
+                        statTile(value: "\(streak.best)", label: streakLabel("Рекорд", streak.unit))
+                        statTile(value: "\(habit.totalCompleted)", label: "Всего")
                     }
 
                     card("Активность") {
@@ -62,9 +65,36 @@ struct HabitDetailView: View {
         return parts.joined(separator: " · ")
     }
 
-    private func statTile(value: Int, label: String) -> some View {
+    private func weekTile(_ week: WeekProgress) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text("Эта неделя")
+                .font(.footnote)
+                .foregroundStyle(Color.secondary)
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(week.completed) из \(week.planned)")
+                    .font(.largeTitle.weight(.bold))
+                    .monospacedDigit()
+                if week.minimal > 0 {
+                    Text("в т.ч. минимум: \(week.minimal)")
+                        .font(.footnote)
+                        .foregroundStyle(Color.secondary)
+                }
+            }
+            ProgressView(value: Double(min(week.completed, max(week.planned, 1))), total: Double(max(week.planned, 1)))
+                .tint(Color(hex: habit?.colorHex ?? "#38D9A9"))
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+    }
+
+    private func streakLabel(_ title: String, _ unit: Streak.Unit) -> String {
+        unit == .weeks ? "\(title), нед." : "\(title), дн."
+    }
+
+    private func statTile(value: String, label: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text("\(value)")
+            Text(value)
                 .font(.title2.weight(.bold))
                 .monospacedDigit()
             Text(label)
