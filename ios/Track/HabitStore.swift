@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import WidgetKit
 
 extension Notification.Name {
@@ -35,6 +36,12 @@ final class HabitStore: ObservableObject {
         } else {
             habits.append(habit)
         }
+        persist()
+    }
+
+    /// The stored order is also the order in widgets.
+    func move(fromOffsets source: IndexSet, toOffset destination: Int) {
+        habits.move(fromOffsets: source, toOffset: destination)
         persist()
     }
 

@@ -215,10 +215,119 @@ struct HabitActivityWidget: Widget {
     }
 }
 
+// MARK: - Lock Screen widget
+
+struct TodayProvider: TimelineProvider {
+    func placeholder(in context: Context) -> HabitListEntry {
+        HabitListEntry(date: Date(), habits: [Habit(name: "Прогулка", colorHex: "#69DB7C")])
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (HabitListEntry) -> Void) {
+        completion(currentEntry())
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<HabitListEntry>) -> Void) {
+        completion(Timeline(entries: [currentEntry()], policy: .after(nextMidnight())))
+    }
+
+    private func currentEntry() -> HabitListEntry {
+        let now = Date()
+        return HabitListEntry(date: now, habits: HabitStorage.load().filter { $0.isPlanned(on: now) })
+    }
+}
+
+struct TodayWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: HabitListEntry
+
+    private var done: Int {
+        entry.habits.filter { $0.isCompleted(on: entry.date) }.count
+    }
+
+    private var nextHabit: Habit? {
+        entry.habits.first { !$0.isCompleted(on: entry.date) }
+    }
+
+    var body: some View {
+        content
+            .containerBackground(for: .widget) { Color.clear }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch family {
+        case .accessoryCircular:
+            if entry.habits.isEmpty {
+                ZStack {
+                    AccessoryWidgetBackground()
+                    Image(systemName: "checkmark")
+                }
+            } else {
+                Gauge(value: Double(done), in: 0...Double(entry.habits.count)) {
+                    Image(systemName: "checkmark")
+                } currentValueLabel: {
+                    Text("\(done)/\(entry.habits.count)")
+                }
+                .gaugeStyle(.accessoryCircularCapacity)
+            }
+        case .accessoryInline:
+            Text(entry.habits.isEmpty ? "Привычки: на сегодня всё" : "Привычки: \(done) из \(entry.habits.count)")
+        default:
+            rectangular
+        }
+    }
+
+    @ViewBuilder
+    private var rectangular: some View {
+        if let habit = nextHabit {
+            Button(intent: ToggleHabitIntent(habitID: habit.id)) {
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "circle")
+                        Text(habit.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                    }
+                    Text("Сегодня \(done) из \(entry.habits.count) · нажмите, чтобы отметить")
+                        .font(.caption)
+                        .lineLimit(2)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        } else {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("На сегодня всё")
+                        .font(.headline)
+                }
+                Text(entry.habits.isEmpty ? "Нет запланированных привычек" : "Выполнено \(done) из \(entry.habits.count)")
+                    .font(.caption)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+}
+
+struct TodayWidget: Widget {
+    let kind = "TrackTodayWidget"
+
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: kind, provider: TodayProvider()) { entry in
+            TodayWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Сегодня")
+        .description("Прогресс за день и отметка ближайшей привычки прямо с экрана блокировки.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
+    }
+}
+
 @main
 struct TrackWidgetBundle: WidgetBundle {
     var body: some Widget {
         HabitListWidget()
         HabitActivityWidget()
+        TodayWidget()
     }
 }

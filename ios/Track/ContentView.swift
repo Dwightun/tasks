@@ -4,6 +4,8 @@ struct ContentView: View {
     @EnvironmentObject private var store: HabitStore
     @ObservedObject private var router = AppRouter.shared
     @State private var isCreating = false
+    @State private var creatingTemplate: HabitTemplate?
+    @State private var isReordering = false
     @State private var path: [UUID] = []
 
     var body: some View {
@@ -15,7 +17,13 @@ struct ContentView: View {
                     } else {
                         reviewPrompt
                         returnCards
-                        ActivityHeatmap(fill: Heatmap.combinedFill(for: store.habits))
+                        // Appears once there is history to show, and grows week by week.
+                        let heatmapWeeks = Heatmap.weeksSpanning(
+                            from: store.habits.map(\.startKey).min() ?? DayKey.key(for: Date())
+                        )
+                        if heatmapWeeks >= 2 {
+                            ActivityHeatmap(fill: Heatmap.combinedFill(for: store.habits), weeks: heatmapWeeks)
+                        }
                         VStack(spacing: 10) {
                             ForEach(store.habits) { habit in
                                 HabitRow(
@@ -36,7 +44,7 @@ struct ContentView: View {
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Привычки")
             .toolbar {
-                ToolbarItem(placement: .topBarLeading) {
+                ToolbarItemGroup(placement: .topBarLeading) {
                     if !store.habits.isEmpty {
                         Button {
                             router.showWeeklyReview = true
@@ -45,10 +53,27 @@ struct ContentView: View {
                         }
                         .accessibilityLabel("Итоги недели")
                     }
+                    if store.habits.count > 1 {
+                        Button {
+                            isReordering = true
+                        } label: {
+                            Image(systemName: "arrow.up.arrow.down")
+                        }
+                        .accessibilityLabel("Порядок привычек")
+                    }
                 }
                 ToolbarItem(placement: .topBarTrailing) {
-                    Button {
-                        isCreating = true
+                    Menu {
+                        Button {
+                            isCreating = true
+                        } label: {
+                            Label("Своя привычка", systemImage: "square.and.pencil")
+                        }
+                        Section("Шаблоны") {
+                            ForEach(HabitTemplate.all) { template in
+                                Button(template.name) { creatingTemplate = template }
+                            }
+                        }
                     } label: {
                         Image(systemName: "plus")
                     }
@@ -59,6 +84,12 @@ struct ContentView: View {
             }
             .sheet(isPresented: $isCreating) {
                 HabitEditor(habit: nil).environmentObject(store)
+            }
+            .sheet(item: $creatingTemplate) { template in
+                HabitEditor(template: template).environmentObject(store)
+            }
+            .sheet(isPresented: $isReordering) {
+                ReorderSheet().environmentObject(store)
             }
             .sheet(isPresented: $router.showWeeklyReview) {
                 WeeklyReviewView().environmentObject(store)
@@ -131,13 +162,58 @@ struct ContentView: View {
     }
 
     private var emptyState: some View {
-        VStack(spacing: 16) {
-            Text("Пока нет привычек")
-                .foregroundStyle(.secondary)
-            Button("Добавить первую") { isCreating = true }
-                .buttonStyle(.borderedProminent)
+        VStack(alignment: .leading, spacing: 12) {
+            Text("С чего начнём?")
+                .font(.title3.weight(.semibold))
+            Text("Выберите готовую привычку — её можно поправить перед сохранением. Лучше начать с одной.")
+                .font(.subheadline)
+                .foregroundStyle(Color.secondary)
+
+            VStack(spacing: 10) {
+                ForEach(HabitTemplate.all) { template in
+                    Button {
+                        creatingTemplate = template
+                    } label: {
+                        templateRow(template)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+
+            Button {
+                isCreating = true
+            } label: {
+                Label("Своя привычка", systemImage: "square.and.pencil")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.bordered)
+            .controlSize(.large)
         }
-        .frame(maxWidth: .infinity)
-        .padding(.top, 80)
+        .padding(.top, 8)
+    }
+
+    private func templateRow(_ template: HabitTemplate) -> some View {
+        HStack(spacing: 12) {
+            Circle()
+                .fill(Color(hex: template.colorHex))
+                .frame(width: 12, height: 12)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(template.name)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Color.primary)
+                Text([template.periodicity.label, template.plan.minimalVersion.map { "минимум: \($0.lowercased())" }]
+                    .compactMap { $0 }
+                    .joined(separator: " · "))
+                    .font(.footnote)
+                    .foregroundStyle(Color.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Image(systemName: "plus.circle.fill")
+                .font(.title3)
+                .foregroundStyle(Color(hex: template.colorHex))
+        }
+        .padding(14)
+        .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
     }
 }

@@ -21,9 +21,19 @@ struct HabitEditor: View {
     static let palette = ["#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#38D9A9", "#4DABF7", "#748FFC", "#DA77F2"]
 
     init(habit: Habit?) {
-        let initial = habit ?? Habit(name: "", colorHex: HabitEditor.palette.randomElement() ?? "#38D9A9")
+        self.init(
+            initial: habit ?? Habit(name: "", colorHex: HabitEditor.palette.randomElement() ?? "#38D9A9"),
+            isNew: habit == nil
+        )
+    }
+
+    init(template: HabitTemplate) {
+        self.init(initial: template.makeHabit(), isNew: true)
+    }
+
+    private init(initial: Habit, isNew: Bool) {
         _draft = State(initialValue: initial)
-        isNew = habit == nil
+        self.isNew = isNew
         var kind = ScheduleKind.daily
         var days: Set<Int> = [0, 1, 2, 3, 4]
         var perWeek = 3

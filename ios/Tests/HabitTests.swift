@@ -328,6 +328,12 @@ final class HabitTests: XCTestCase {
         XCTAssertEqual(h.periodicity(onKey: "2026-10-01"), .timesPerWeek(5))
     }
 
+    func testHeatmapGrowsFromStartWeek() {
+        XCTAssertEqual(Heatmap.weeksSpanning(from: "2026-09-30", today: day("2026-10-01")), 1)
+        XCTAssertEqual(Heatmap.weeksSpanning(from: "2026-09-27", today: day("2026-10-01")), 2)
+        XCTAssertEqual(Heatmap.weeksSpanning(from: "2025-01-01", today: day("2026-10-01")), 26)
+    }
+
     func testTimesPerWeekLabelUsesCorrectPlural() {
         XCTAssertEqual(Habit.timesPerWeekLabel(1), "1 раз в неделю")
         XCTAssertEqual(Habit.timesPerWeekLabel(3), "3 раза в неделю")

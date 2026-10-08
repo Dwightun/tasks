@@ -6,6 +6,7 @@ struct HabitDetailView: View {
     let habitID: UUID
     @State private var isEditing = false
     @State private var isPausing = false
+    @State private var showFullHistory = false
 
     private struct PlanRow: Hashable {
         let title: String
@@ -28,33 +29,50 @@ struct HabitDetailView: View {
                         pauseBanner(pause)
                     }
 
-                    weekTile(habit.weekProgress(containing: Date()))
+                    weekTile(habit)
 
-                    let streak = habit.streak()
-                    HStack(spacing: 10) {
-                        statTile(value: "\(streak.current)", label: streakLabel("Серия", streak.unit))
-                        statTile(value: "\(streak.best)", label: streakLabel("Рекорд", streak.unit))
-                        statTile(value: "\(habit.totalCompleted)", label: "Всего")
+                    let weeks = Heatmap.weeksSpanning(from: habit.startKey)
+                    if habit.totalCompleted == 0 && weeks < 2 {
+                        Text("Отмечайте выполнение — здесь появится ваша история: серии, карта активности и календарь.")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.secondary)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(14)
+                            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    } else {
+                        let streak = habit.streak()
+                        HStack(spacing: 10) {
+                            statTile(value: "\(streak.current)", label: streakLabel("Серия", streak.unit))
+                            statTile(value: "\(streak.best)", label: streakLabel("Рекорд", streak.unit))
+                            statTile(value: "\(habit.totalCompleted)", label: "Всего")
+                        }
                     }
 
                     planCard(habit.plan)
 
-                    card("Активность") {
-                        ActivityHeatmap(fill: Heatmap.habitFill(for: habit))
+                    // The map grows with the habit instead of showing half a year of empty weeks.
+                    if weeks >= 2 {
+                        card("Активность") {
+                            ActivityHeatmap(fill: Heatmap.habitFill(for: habit), weeks: weeks)
+                        }
                     }
 
-                    card("История") {
-                        MonthCalendar(
-                            habit: habit,
-                            onToggle: { date in store.toggle(habitID, on: date) },
-                            onSetStatus: { date, status, reason in
-                                store.setStatus(habitID, status, on: date, reason: reason)
-                            }
-                        )
-                        Text("Нажмите на день, чтобы отметить или снять выполнение. Удерживайте — минимум, отдых или пропуск.")
-                            .font(.footnote)
-                            .foregroundStyle(Color.secondary)
+                    if showFullHistory {
+                        card("История") {
+                            MonthCalendar(
+                                habit: habit,
+                                onToggle: { date in store.toggle(habitID, on: date) },
+                                onSetStatus: { date, status, reason in
+                                    store.setStatus(habitID, status, on: date, reason: reason)
+                                }
+                            )
+                        }
                     }
+                    Button(showFullHistory ? "Скрыть историю" : "Вся история") {
+                        withAnimation { showFullHistory.toggle() }
+                    }
+                    .buttonStyle(.bordered)
+                    .frame(maxWidth: .infinity)
                 }
                 .padding(16)
             }
@@ -152,8 +170,9 @@ struct HabitDetailView: View {
         }
     }
 
-    private func weekTile(_ week: WeekProgress) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
+    private func weekTile(_ habit: Habit) -> some View {
+        let week = habit.weekProgress(containing: Date())
+        return VStack(alignment: .leading, spacing: 4) {
             Text("Эта неделя")
                 .font(.footnote)
                 .foregroundStyle(Color.secondary)
@@ -168,7 +187,21 @@ struct HabitDetailView: View {
                 }
             }
             ProgressView(value: Double(min(week.completed, max(week.planned, 1))), total: Double(max(week.planned, 1)))
-                .tint(Color(hex: habit?.colorHex ?? "#38D9A9"))
+                .tint(Color(hex: habit.colorHex))
+
+            WeekStrip(
+                habit: habit,
+                onToggle: { date in store.toggle(habitID, on: date) },
+                onSetStatus: { date, status, reason in
+                    store.setStatus(habitID, status, on: date, reason: reason)
+                }
+            )
+            .padding(.top, 10)
+
+            Text("Удерживайте день — минимум, отдых или пропуск.")
+                .font(.caption)
+                .foregroundStyle(Color.secondary)
+                .padding(.top, 4)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)

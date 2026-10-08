@@ -11,6 +11,15 @@ enum Heatmap {
         return calendar.date(byAdding: .day, value: -(weeks - 1) * 7, to: thisMonday) ?? thisMonday
     }
 
+    /// Weeks from the one containing `startKey` through the current week, so the map grows with the habit.
+    static func weeksSpanning(from startKey: String, today: Date = Date(), limit: Int = 26, calendar: Calendar = .current) -> Int {
+        guard let start = DayKey.date(from: startKey, calendar: calendar) else { return 1 }
+        let first = Habit.monday(of: start, calendar: calendar)
+        let current = Habit.monday(of: today, calendar: calendar)
+        let days = calendar.dateComponents([.day], from: first, to: current).day ?? 0
+        return min(limit, max(1, days / 7 + 1))
+    }
+
     static func date(week: Int, day: Int, start: Date, calendar: Calendar = .current) -> Date {
         calendar.date(byAdding: .day, value: week * 7 + day, to: start) ?? start
     }
