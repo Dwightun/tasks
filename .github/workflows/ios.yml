@@ -137,6 +137,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Track.xcarchive" \
             DEVELOPMENT_TEAM="$DEVELOPMENT_TEAM" \
+            TELEMETRYDECK_APP_ID="${{ vars.TELEMETRYDECK_APP_ID }}" \
             CURRENT_PROJECT_VERSION="${{ github.run_number }}"
 
       - name: Export IPA

@@ -1,8 +1,13 @@
 import SwiftUI
+import WidgetKit
 
 struct ContentView: View {
     @EnvironmentObject private var store: HabitStore
     @ObservedObject private var router = AppRouter.shared
+    @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("onboardingCompleted") private var onboardingCompleted = false
+    @AppStorage("widgetTipDismissed") private var widgetTipDismissed = false
+    @State private var hasWidget = true
     @State private var isCreating = false
     @State private var creatingTemplate: HabitTemplate?
     @State private var isShowingSettings = false
@@ -19,6 +24,7 @@ struct ContentView: View {
                         reviewPrompt
                         checkInCard
                         returnCards
+                        widgetTip
                         // Appears once there is history to show, and grows week by week.
                         let heatmapWeeks = Heatmap.weeksSpanning(
                             from: store.habits.map(\.startKey).min() ?? DayKey.key(for: Date())
@@ -89,6 +95,18 @@ struct ContentView: View {
             .sheet(item: $creatingTemplate) { template in
                 HabitEditor(template: template).environmentObject(store)
             }
+            .fullScreenCover(isPresented: Binding(
+                get: { !onboardingCompleted && store.habits.isEmpty },
+                set: { _ in }
+            )) {
+                OnboardingView { skipped in
+                    onboardingCompleted = true
+                    Analytics.send(skipped ? "Onboarding.skipped" : "Onboarding.completed")
+                }
+            }
+            .task(id: scenePhase) {
+                if scenePhase == .active { hasWidget = await installedWidgetCount() > 0 }
+            }
             .sheet(isPresented: $isShowingSettings) {
                 SettingsSheet().environmentObject(store)
             }
@@ -135,6 +153,47 @@ struct ContentView: View {
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// The widget is the core of one-tap logging; the tip hides itself once any widget is installed.
+    @ViewBuilder
+    private var widgetTip: some View {
+        if !hasWidget, !widgetTipDismissed {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: "square.grid.2x2")
+                    .font(.title3)
+                    .foregroundStyle(Heatmap.accent)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Добавьте виджет")
+                        .font(.subheadline.weight(.semibold))
+                    Text("Удерживайте экран «Домой» → «Изменить» → «Добавить виджет» → «Привычки». Отмечать станет можно одним касанием.")
+                        .font(.footnote)
+                        .foregroundStyle(Color.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    widgetTipDismissed = true
+                    Analytics.send("WidgetTip.dismissed")
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(Color.secondary)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Скрыть подсказку")
+            }
+            .padding(14)
+            .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        }
+    }
+
+    private func installedWidgetCount() async -> Int {
+        await withCheckedContinuation { continuation in
+            WidgetCenter.shared.getCurrentConfigurations { result in
+                continuation.resume(returning: (try? result.get())?.count ?? 0)
+            }
         }
     }
 

@@ -28,20 +28,25 @@ struct HabitEditor: View {
         "alarm", "iphone.slash", "leaf", "heart", "music.note", "sparkles",
     ]
 
+    /// Template the new habit started from, for analytics only.
+    private let templateID: String?
+
     init(habit: Habit?) {
         self.init(
             initial: habit ?? Habit(name: "", colorHex: HabitEditor.palette.randomElement() ?? "#38D9A9"),
-            isNew: habit == nil
+            isNew: habit == nil,
+            templateID: nil
         )
     }
 
     init(template: HabitTemplate) {
-        self.init(initial: template.makeHabit(), isNew: true)
+        self.init(initial: template.makeHabit(), isNew: true, templateID: template.id)
     }
 
-    private init(initial: Habit, isNew: Bool) {
+    private init(initial: Habit, isNew: Bool, templateID: String?) {
         _draft = State(initialValue: initial)
         self.isNew = isNew
+        self.templateID = templateID
         var kind = ScheduleKind.daily
         var days: Set<Int> = [0, 1, 2, 3, 4]
         var perWeek = 3
@@ -303,6 +308,16 @@ struct HabitEditor: View {
             draft.reminderMinutes = nil
         }
         store.upsert(draft)
+        if isNew {
+            let filledPlanFields = planKeys.filter { draft.plan[keyPath: $0] != nil }.count
+            Analytics.send("Habit.created", [
+                "template": templateID ?? "custom",
+                "schedule": scheduleKind == .perWeek ? "perWeek" : (scheduleKind == .weekdays ? "weekdays" : "daily"),
+                "dailyTarget": String(dailyTarget),
+                "planFields": String(filledPlanFields),
+                "reminder": reminderOn ? "yes" : "no",
+            ])
+        }
         dismiss()
     }
 }

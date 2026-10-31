@@ -4,7 +4,6 @@
 отмечаешь выполнение в приложении или прямо с виджета на экране «Домой».
 
 - `ios/` — нативное приложение (SwiftUI, iOS 17+) и интерактивный виджет (WidgetKit + App Intents)
-- `web/` — ранний веб-прототип (PWA)
 
 Xcode-проект не хранится в репозитории: он генерируется из `ios/project.yml` через
 [XcodeGen](https://github.com/yonaskolb/XcodeGen). Сборка идёт в GitHub Actions на macOS

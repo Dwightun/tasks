@@ -9,6 +9,7 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
     ) -> Bool {
         UNUserNotificationCenter.current().delegate = self
         ReminderScheduler.registerCategories()
+        Analytics.start()
         return true
     }
 
@@ -54,7 +55,11 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
         }
 
         let day = info[ReminderScheduler.dayKey] as? String ?? DayKey.key(for: Date())
+        let before = HabitStorage.load().first { $0.id == id }
         let habits = HabitStorage.update(habitID: id) { $0.setStatus(status, onKey: day) }
+        if let before, let after = habits.first(where: { $0.id == id }), let date = DayKey.date(from: day) {
+            Analytics.recordMark(before: before, after: after, on: date, source: "notification")
+        }
         WidgetCenter.shared.reloadAllTimelines()
         await MainActor.run {
             NotificationCenter.default.post(name: .habitsChangedExternally, object: nil)

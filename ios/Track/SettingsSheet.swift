@@ -3,6 +3,15 @@ import SwiftUI
 struct SettingsSheet: View {
     @EnvironmentObject private var store: HabitStore
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.openURL) private var openURL
+
+    private static let feedbackURL = URL(string: "https://t.me/dwightun")!
+
+    private var versionText: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "?"
+        return "Версия \(version) (\(build))"
+    }
 
     @State private var checkInEnabled = ReviewSettings.checkInEnabled
     @State private var checkInTime = SettingsSheet.time(ReviewSettings.checkInMinutes)
@@ -37,6 +46,17 @@ struct SettingsSheet: View {
                     Section {
                         Button("Порядок привычек") { isReordering = true }
                     }
+                }
+
+                Section {
+                    Button {
+                        Analytics.send("Feedback.opened")
+                        openURL(Self.feedbackURL)
+                    } label: {
+                        Label("Написать разработчику", systemImage: "paperplane")
+                    }
+                } footer: {
+                    Text("Telegram @dwightun — любые мысли, баги и идеи. Скриншот с отзывом можно отправить и прямо из TestFlight.\n\n\(versionText)")
                 }
             }
             .navigationTitle("Настройки")

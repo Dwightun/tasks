@@ -57,7 +57,9 @@ final class HabitStore: ObservableObject {
 
     func toggle(_ id: UUID, on date: Date) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        let before = habits[index]
         habits[index].toggle(on: date)
+        Analytics.recordMark(before: before, after: habits[index], on: date, source: "app")
         persist()
     }
 
@@ -69,7 +71,9 @@ final class HabitStore: ObservableObject {
 
     func setStatus(_ id: UUID, _ status: DayStatus?, on date: Date, reason: SkipReason? = nil) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        let before = habits[index]
         habits[index].setStatus(status, onKey: DayKey.key(for: date), reason: reason)
+        Analytics.recordMark(before: before, after: habits[index], on: date, source: "app")
         persist()
     }
 
@@ -96,6 +100,7 @@ final class HabitStore: ObservableObject {
     func applyPeriodicity(_ id: UUID, _ periodicity: Periodicity) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         habits[index].setPeriodicity(periodicity, from: WeeklyReview.effectiveDateForChange())
+        Analytics.send("Review.suggestionApplied", ["action": "changePeriodicity"])
         persist()
     }
 
@@ -103,6 +108,7 @@ final class HabitStore: ObservableObject {
         let key = DayKey.key(for: Habit.monday(of: weekStart))
         ReviewSettings.lastReviewedWeek = key
         lastReviewedWeek = key
+        Analytics.send("Review.completed")
     }
 
     func reflection(on date: Date) -> DayReflection? {
@@ -112,6 +118,9 @@ final class HabitStore: ObservableObject {
     func setReflection(_ reflection: DayReflection?, on date: Date) {
         reflections[DayKey.key(for: date)] = reflection
         ReflectionStorage.save(reflections)
+        if let reflection {
+            Analytics.send("CheckIn.saved", ["mood": String(reflection.mood), "hasNote": reflection.note == nil ? "no" : "yes"])
+        }
     }
 
     func updateCheckIn(enabled: Bool, minutes: Int, reminder: Bool) {
