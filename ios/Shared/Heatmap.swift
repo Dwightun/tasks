@@ -49,6 +49,7 @@ enum Heatmap {
             switch habit.status(onKey: key) {
             case .full: return color
             case .minimal: return color.opacity(0.45)
+            case .partial: return color.opacity(0.25)
             case .rest: return Color.secondary.opacity(0.3)
             case .skipped, nil: return habit.isPaused(onKey: key) ? emptyFill.opacity(0.4) : emptyFill
             }

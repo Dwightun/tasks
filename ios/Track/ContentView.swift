@@ -5,7 +5,8 @@ struct ContentView: View {
     @ObservedObject private var router = AppRouter.shared
     @State private var isCreating = false
     @State private var creatingTemplate: HabitTemplate?
-    @State private var isReordering = false
+    @State private var isShowingSettings = false
+    @State private var pendingMood: Int?
     @State private var path: [UUID] = []
 
     var body: some View {
@@ -16,6 +17,7 @@ struct ContentView: View {
                         emptyState
                     } else {
                         reviewPrompt
+                        checkInCard
                         returnCards
                         // Appears once there is history to show, and grows week by week.
                         let heatmapWeeks = Heatmap.weeksSpanning(
@@ -32,7 +34,8 @@ struct ContentView: View {
                                     onToggle: { store.toggleToday(habit.id) },
                                     onSetStatus: { status, reason in
                                         store.setStatus(habit.id, status, on: Date(), reason: reason)
-                                    }
+                                    },
+                                    onRemoveRepetition: { store.removeRepetition(habit.id, on: Date()) }
                                 )
                             }
                         }
@@ -53,14 +56,12 @@ struct ContentView: View {
                         }
                         .accessibilityLabel("Итоги недели")
                     }
-                    if store.habits.count > 1 {
-                        Button {
-                            isReordering = true
-                        } label: {
-                            Image(systemName: "arrow.up.arrow.down")
-                        }
-                        .accessibilityLabel("Порядок привычек")
+                    Button {
+                        isShowingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
                     }
+                    .accessibilityLabel("Настройки")
                 }
                 ToolbarItem(placement: .topBarTrailing) {
                     Menu {
@@ -88,8 +89,12 @@ struct ContentView: View {
             .sheet(item: $creatingTemplate) { template in
                 HabitEditor(template: template).environmentObject(store)
             }
-            .sheet(isPresented: $isReordering) {
-                ReorderSheet().environmentObject(store)
+            .sheet(isPresented: $isShowingSettings) {
+                SettingsSheet().environmentObject(store)
+            }
+            .sheet(isPresented: $router.showCheckIn, onDismiss: { pendingMood = nil }) {
+                CheckInSheet(date: Date(), existing: store.reflection(on: Date()), preselectedMood: pendingMood)
+                    .environmentObject(store)
             }
             .sheet(isPresented: $router.showWeeklyReview) {
                 WeeklyReviewView().environmentObject(store)
@@ -130,6 +135,58 @@ struct ContentView: View {
                 .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
             }
             .buttonStyle(.plain)
+        }
+    }
+
+    /// From the chosen evening time: one tap on a mood opens the check-in with it preselected.
+    @ViewBuilder
+    private var checkInCard: some View {
+        let now = Date()
+        let time = Calendar.current.dateComponents([.hour, .minute], from: now)
+        let minutesNow = (time.hour ?? 0) * 60 + (time.minute ?? 0)
+
+        if ReviewSettings.checkInEnabled, minutesNow >= ReviewSettings.checkInMinutes {
+            if let reflection = store.reflection(on: now) {
+                Button {
+                    router.showCheckIn = true
+                } label: {
+                    HStack(spacing: 10) {
+                        Text(reflection.symbol)
+                            .font(.title2)
+                        Text("Сегодня: \(reflection.title.lowercased())")
+                            .font(.subheadline)
+                            .foregroundStyle(Color.primary)
+                        Spacer()
+                        Text("Изменить")
+                            .font(.footnote)
+                            .foregroundStyle(Color.secondary)
+                    }
+                    .padding(14)
+                    .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                }
+                .buttonStyle(.plain)
+            } else {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("Как прошёл день?")
+                        .font(.subheadline.weight(.semibold))
+                    HStack(spacing: 0) {
+                        ForEach(1...5, id: \.self) { mood in
+                            Button {
+                                pendingMood = mood
+                                router.showCheckIn = true
+                            } label: {
+                                Text(DayReflection.moodSymbols[mood - 1])
+                                    .font(.system(size: 30))
+                                    .frame(maxWidth: .infinity)
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityLabel(DayReflection.moodTitles[mood - 1])
+                        }
+                    }
+                }
+                .padding(14)
+                .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            }
         }
     }
 
@@ -192,18 +249,29 @@ struct ContentView: View {
         .padding(.top, 8)
     }
 
+    private func templateSubtitle(_ template: HabitTemplate) -> String {
+        var parts: [String] = [template.periodicity.label]
+        if template.dailyTarget > 1 {
+            parts.append("\(template.dailyTarget) раз в день")
+        }
+        if let minimal = template.plan.minimalVersion {
+            parts.append("минимум: \(minimal.lowercased())")
+        }
+        return parts.joined(separator: " · ")
+    }
+
     private func templateRow(_ template: HabitTemplate) -> some View {
         HStack(spacing: 12) {
-            Circle()
-                .fill(Color(hex: template.colorHex))
-                .frame(width: 12, height: 12)
+            Image(systemName: template.icon)
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(Color(hex: template.colorHex))
+                .frame(width: 36, height: 36)
+                .background(Color(hex: template.colorHex).opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
             VStack(alignment: .leading, spacing: 2) {
                 Text(template.name)
                     .font(.body.weight(.semibold))
                     .foregroundStyle(Color.primary)
-                Text([template.periodicity.label, template.plan.minimalVersion.map { "минимум: \($0.lowercased())" }]
-                    .compactMap { $0 }
-                    .joined(separator: " · "))
+                Text(templateSubtitle(template))
                     .font(.footnote)
                     .foregroundStyle(Color.secondary)
                     .lineLimit(1)

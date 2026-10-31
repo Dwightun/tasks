@@ -8,11 +8,15 @@ struct WeeklyReviewView: View {
     @State private var weekStart = WeeklyReview.defaultWeekStart()
     @State private var editing: Habit?
     @State private var pausing: HabitRef?
-    @State private var reminderOn = ReviewSettings.isEnabled
-    @State private var reminderTime = WeeklyReviewView.time(fromMinutes: ReviewSettings.minutes)
+    @State private var checkInDay: DayRef?
 
     private struct HabitRef: Identifiable {
         let id: UUID
+    }
+
+    private struct DayRef: Identifiable {
+        let date: Date
+        var id: Date { date }
     }
 
     private let defaultWeekStart = WeeklyReview.defaultWeekStart()
@@ -35,11 +39,11 @@ struct WeeklyReviewView: View {
                             .padding(.vertical, 40)
                     } else {
                         totals(habits, today: today)
+                        moodStrip(today: today)
                         ForEach(habits) { habit in
                             habitCard(habit, today: today)
                         }
                     }
-                    reminderSettings
                 }
                 .padding(16)
             }
@@ -61,6 +65,10 @@ struct WeeklyReviewView: View {
                 PauseSheet { kind, end in
                     store.startPause(ref.id, kind: kind, until: end)
                 }
+            }
+            .sheet(item: $checkInDay) { day in
+                CheckInSheet(date: day.date, existing: store.reflection(on: day.date))
+                    .environmentObject(store)
             }
         }
     }
@@ -170,7 +178,8 @@ struct WeeklyReviewView: View {
                         color: color,
                         status: habit.status(onKey: key),
                         size: 22,
-                        idleColor: planned ? Color(.separator) : Color(.separator).opacity(0.3)
+                        idleColor: planned ? Color(.separator) : Color(.separator).opacity(0.3),
+                        progress: habit.progress(onKey: key)
                     )
                     .opacity(habit.isPaused(onKey: key) ? 0.4 : 1)
                 }
@@ -223,25 +232,42 @@ struct WeeklyReviewView: View {
         }
     }
 
-    private var reminderSettings: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Toggle("Напоминать в воскресенье", isOn: $reminderOn)
-            if reminderOn {
-                DatePicker("Время", selection: $reminderTime, displayedComponents: .hourAndMinute)
+    /// How the days felt next to what was done; tapping a past day opens its check-in.
+    private func moodStrip(today: Date) -> some View {
+        let calendar = Calendar.current
+        let todayStart = calendar.startOfDay(for: today)
+        return VStack(alignment: .leading, spacing: 10) {
+            Text("Самочувствие")
+                .font(.footnote)
+                .foregroundStyle(Color.secondary)
+            HStack(spacing: 0) {
+                ForEach(0..<7, id: \.self) { offset in
+                    let day = calendar.date(byAdding: .day, value: offset, to: weekStart) ?? weekStart
+                    let reflection = store.reflection(on: day)
+                    Button {
+                        checkInDay = DayRef(date: day)
+                    } label: {
+                        VStack(spacing: 4) {
+                            Text(Habit.weekdaySymbols[offset])
+                                .font(.caption2)
+                                .foregroundStyle(Color.secondary)
+                            Text(reflection?.symbol ?? "·")
+                                .font(.system(size: 22))
+                                .foregroundStyle(Color.secondary)
+                                .frame(height: 28)
+                        }
+                        .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(day > todayStart)
+                }
             }
         }
         .padding(14)
         .background(Color(.secondarySystemGroupedBackground), in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-        .onChange(of: reminderOn) { _, _ in saveReminder() }
-        .onChange(of: reminderTime) { _, _ in saveReminder() }
     }
 
     // MARK: Helpers
-
-    private func saveReminder() {
-        let time = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
-        store.updateReviewReminder(enabled: reminderOn, minutes: (time.hour ?? 19) * 60 + (time.minute ?? 0))
-    }
 
     private func shiftWeek(by weeks: Int) {
         if let next = Calendar.current.date(byAdding: .day, value: 7 * weeks, to: weekStart) {
@@ -253,9 +279,5 @@ struct WeeklyReviewView: View {
         SkipReason.allCases
             .compactMap { reason in reasons[reason].map { "\(reason.title.lowercased()) ×\($0)" } }
             .joined(separator: ", ")
-    }
-
-    private static func time(fromMinutes minutes: Int) -> Date {
-        Calendar.current.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: Date()) ?? Date()
     }
 }

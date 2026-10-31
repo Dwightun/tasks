@@ -12,6 +12,7 @@ struct HabitEditor: View {
     @State private var scheduleKind: ScheduleKind
     @State private var weekdays: Set<Int>
     @State private var timesPerWeek: Int
+    @State private var dailyTarget: Int
     @State private var reminderOn: Bool
     @State private var reminderTime: Date
     @State private var notificationsDenied = false
@@ -19,6 +20,13 @@ struct HabitEditor: View {
     private let isNew: Bool
 
     static let palette = ["#FF6B6B", "#FFA94D", "#FFD43B", "#69DB7C", "#38D9A9", "#4DABF7", "#748FFC", "#DA77F2"]
+
+    static let icons = [
+        "figure.walk", "figure.run", "figure.yoga", "dumbbell", "bicycle", "figure.mind.and.body",
+        "book", "pencil", "graduationcap", "brain.head.profile", "drop", "cup.and.saucer",
+        "fork.knife", "carrot", "pills", "bed.double", "moon", "sun.max",
+        "alarm", "iphone.slash", "leaf", "heart", "music.note", "sparkles",
+    ]
 
     init(habit: Habit?) {
         self.init(
@@ -50,6 +58,7 @@ struct HabitEditor: View {
         _scheduleKind = State(initialValue: kind)
         _weekdays = State(initialValue: days)
         _timesPerWeek = State(initialValue: perWeek)
+        _dailyTarget = State(initialValue: initial.dailyTarget)
         _planExpanded = State(initialValue: initial.plan != PlanDetails())
         let minutes = initial.reminderMinutes ?? 9 * 60
         _reminderOn = State(initialValue: initial.reminderMinutes != nil)
@@ -73,6 +82,16 @@ struct HabitEditor: View {
                     HStack(spacing: 0) {
                         ForEach(Self.palette, id: \.self) { hex in
                             colorSwatch(hex)
+                        }
+                    }
+                    .padding(.vertical, 6)
+                }
+
+                Section("Иконка") {
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 6), count: 6), spacing: 10) {
+                        iconButton(nil)
+                        ForEach(Self.icons, id: \.self) { name in
+                            iconButton(name)
                         }
                     }
                     .padding(.vertical, 6)
@@ -102,6 +121,18 @@ struct HabitEditor: View {
                         Text("В любые дни недели. Привычка видна в виджете, пока недельный план не выполнен.")
                     } else if !isNew {
                         Text("Изменение расписания действует с сегодняшнего дня; прошлые недели считаются по старому плану.")
+                    }
+                }
+
+                Section {
+                    Stepper(
+                        dailyTarget == 1 ? "Один раз в день" : "Раз в день: \(dailyTarget)",
+                        value: $dailyTarget,
+                        in: 1...20
+                    )
+                } footer: {
+                    if dailyTarget > 1 {
+                        Text("Каждый тап добавляет один повтор, кружок заполняется по частям. День засчитывается, когда набрано \(dailyTarget).")
                     }
                 }
 
@@ -183,6 +214,25 @@ struct HabitEditor: View {
         .buttonStyle(.borderless)
     }
 
+    private func iconButton(_ name: String?) -> some View {
+        let selected = draft.icon == name
+        let color = Color(hex: draft.colorHex)
+        return Button {
+            draft.icon = name
+        } label: {
+            Image(systemName: name ?? "nosign")
+                .font(.system(size: 18, weight: .medium))
+                .foregroundStyle(selected ? Color.white : (name == nil ? Color.secondary : color))
+                .frame(width: 40, height: 40)
+                .background(
+                    selected ? color : Color(.tertiarySystemFill),
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
+                )
+        }
+        .buttonStyle(.borderless)
+        .accessibilityLabel(name == nil ? "Без иконки" : name ?? "")
+    }
+
     private func weekdayChip(_ index: Int) -> some View {
         let selected = weekdays.contains(index)
         return Button {
@@ -245,6 +295,7 @@ struct HabitEditor: View {
             periodicity = .timesPerWeek(timesPerWeek)
         }
         draft.setPeriodicity(periodicity)
+        draft.setDailyTarget(dailyTarget)
         if reminderOn {
             let time = Calendar.current.dateComponents([.hour, .minute], from: reminderTime)
             draft.reminderMinutes = (time.hour ?? 9) * 60 + (time.minute ?? 0)

@@ -194,7 +194,8 @@ struct HabitDetailView: View {
                 onToggle: { date in store.toggle(habitID, on: date) },
                 onSetStatus: { date, status, reason in
                     store.setStatus(habitID, status, on: date, reason: reason)
-                }
+                },
+                onRemoveRepetition: { date in store.removeRepetition(habitID, on: date) }
             )
             .padding(.top, 10)
 

@@ -38,6 +38,9 @@ final class HabitTests: XCTestCase {
         original.plan.cue = "После работы"
         original.pauses = [Pause(kind: .travel, start: "2026-10-05", end: "2026-10-09")]
         original.weekReasons = ["2026-09-21": .noTime]
+        original.icon = "drop"
+        original.dailyTarget = 3
+        original.entries["2026-10-01"] = DayEntry(status: .partial, count: 2)
         original.reminderMinutes = 8 * 60
 
         let data = try JSONEncoder().encode([original])
@@ -332,6 +335,72 @@ final class HabitTests: XCTestCase {
         XCTAssertEqual(Heatmap.weeksSpanning(from: "2026-09-30", today: day("2026-10-01")), 1)
         XCTAssertEqual(Heatmap.weeksSpanning(from: "2026-09-27", today: day("2026-10-01")), 2)
         XCTAssertEqual(Heatmap.weeksSpanning(from: "2025-01-01", today: day("2026-10-01")), 26)
+    }
+
+    // MARK: Several times a day
+
+    func testCountedHabitFillsUpTapByTap() {
+        var h = habit(.daily)
+        h.dailyTarget = 3
+        let date = day("2026-10-01")
+
+        h.toggle(on: date)
+        XCTAssertEqual(h.status(onKey: "2026-10-01"), .partial)
+        XCTAssertEqual(h.count(onKey: "2026-10-01"), 1)
+        XCTAssertFalse(h.isCompleted(on: date))
+        XCTAssertTrue(h.isOpen(onKey: "2026-10-01"))
+
+        h.toggle(on: date)
+        h.toggle(on: date)
+        XCTAssertEqual(h.status(onKey: "2026-10-01"), .full)
+        XCTAssertEqual(h.count(onKey: "2026-10-01"), 3)
+        XCTAssertEqual(h.progress(onKey: "2026-10-01"), 1)
+
+        h.toggle(on: date)
+        XCTAssertNil(h.status(onKey: "2026-10-01"), "tapping a completed day clears it")
+    }
+
+    func testRemovingRepetitionStepsBack() {
+        var h = habit(.daily)
+        h.dailyTarget = 2
+        h.setStatus(.full, onKey: "2026-10-01")
+
+        h.removeRepetition(on: day("2026-10-01"))
+        XCTAssertEqual(h.entries["2026-10-01"], DayEntry(status: .partial, count: 1))
+        h.removeRepetition(on: day("2026-10-01"))
+        XCTAssertNil(h.entries["2026-10-01"])
+    }
+
+    func testPartialDayDoesNotCountForTheWeek() {
+        var h = habit(.daily)
+        h.dailyTarget = 3
+        h.toggle(on: day("2026-09-28"))
+
+        XCTAssertEqual(h.weekProgress(containing: day("2026-09-28")).completed, 0)
+    }
+
+    func testLoweringTargetCompletesReachedDays() {
+        var h = habit(.daily)
+        h.dailyTarget = 4
+        h.entries["2026-09-28"] = DayEntry(status: .partial, count: 2)
+        h.entries["2026-09-29"] = DayEntry(status: .partial, count: 1)
+
+        h.setDailyTarget(2)
+        XCTAssertEqual(h.status(onKey: "2026-09-28"), .full)
+        XCTAssertEqual(h.status(onKey: "2026-09-29"), .partial)
+    }
+
+    func testOlderDataGetsDefaultsForNewFields() throws {
+        let json = """
+        [{"id":"6F9619FF-8B86-D011-B42D-00C04FC964FF","name":"Чтение","colorHex":"#4DABF7",
+          "createdAt":780000000,"planHistory":[{"since":"0000-01-01","periodicity":{"daily":{}}}],
+          "entries":{"2026-09-28":{"status":"full"}},"pauses":[],"plan":{}}]
+        """
+        let decoded = try XCTUnwrap(JSONDecoder().decode([Habit].self, from: Data(json.utf8)).first)
+        XCTAssertEqual(decoded.dailyTarget, 1)
+        XCTAssertNil(decoded.icon)
+        XCTAssertTrue(decoded.weekReasons.isEmpty)
+        XCTAssertEqual(decoded.count(onKey: "2026-09-28"), 1)
     }
 
     func testTimesPerWeekLabelUsesCorrectPlural() {

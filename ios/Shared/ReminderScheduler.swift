@@ -17,6 +17,7 @@ enum ReminderScheduler {
     static let habitIDKey = "habitID"
     static let dayKey = "day"
     static let weeklyReviewID = "weekly-review"
+    static let checkInID = "evening-checkin"
 
     private static let snoozeSuffix = "-snooze"
     private static let horizonDays = 14
@@ -73,7 +74,7 @@ enum ReminderScheduler {
                 let habit = habits.first(where: { $0.id.uuidString == idString }),
                 habit.reminderMinutes != nil
             else { return true }
-            return habit.status(onKey: key) != nil || habit.isPaused(onKey: key)
+            return !habit.isOpen(onKey: key) || habit.isPaused(onKey: key)
         }
         center.removePendingNotificationRequests(withIdentifiers: obsolete.map(\.identifier))
 
@@ -88,7 +89,7 @@ enum ReminderScheduler {
                     let fireDate = calendar.date(bySettingHour: minutes / 60, minute: minutes % 60, second: 0, of: day),
                     fireDate > now,
                     habit.isPlanned(on: day, calendar: calendar),
-                    habit.status(onKey: DayKey.key(for: day, calendar: calendar)) == nil
+                    habit.isOpen(onKey: DayKey.key(for: day, calendar: calendar))
                 else { continue }
 
                 let key = DayKey.key(for: day, calendar: calendar)
@@ -104,9 +105,21 @@ enum ReminderScheduler {
             }
         }
 
-        // One slot is reserved for the weekly review reminder.
-        for item in requests.sorted(by: { $0.fireDate < $1.fireDate }).prefix(maxPending - 1) {
+        // Two slots are reserved: weekly review and evening check-in.
+        for item in requests.sorted(by: { $0.fireDate < $1.fireDate }).prefix(maxPending - 2) {
             try? await center.add(item.request)
+        }
+
+        if ReviewSettings.checkInEnabled, ReviewSettings.checkInReminder {
+            let content = UNMutableNotificationContent()
+            content.title = "Как прошёл день?"
+            content.body = "Оцените день и отметьте, что на него повлияло."
+            content.sound = .default
+            var time = DateComponents()
+            time.hour = ReviewSettings.checkInMinutes / 60
+            time.minute = ReviewSettings.checkInMinutes % 60
+            let trigger = UNCalendarNotificationTrigger(dateMatching: time, repeats: true)
+            try? await center.add(UNNotificationRequest(identifier: checkInID, content: content, trigger: trigger))
         }
 
         if ReviewSettings.isEnabled, !habits.isEmpty {

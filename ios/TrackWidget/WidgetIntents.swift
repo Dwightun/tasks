@@ -40,6 +40,16 @@ struct HabitListConfigIntent: WidgetConfigurationIntent {
     init() {}
 }
 
+struct SingleHabitConfigIntent: WidgetConfigurationIntent {
+    static var title: LocalizedStringResource = "Привычка"
+    static var description = IntentDescription("Одна привычка на экране блокировки. Если не выбрана, показывается ближайшая на сегодня.")
+
+    @Parameter(title: "Привычка")
+    var habit: HabitEntity?
+
+    init() {}
+}
+
 struct HabitActivityConfigIntent: WidgetConfigurationIntent {
     static var title: LocalizedStringResource = "Активность"
     static var description = IntentDescription("Карта активности одной привычки. Если не выбрана, показываются все привычки вместе.")

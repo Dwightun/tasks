@@ -89,6 +89,8 @@ struct MonthCalendar: View {
                 .background {
                     if status == .full {
                         Circle().fill(color)
+                    } else if status == .partial {
+                        Circle().fill(color.opacity(0.2))
                     } else if status == .minimal {
                         Circle().fill(color.opacity(0.4))
                     } else if status == .rest {

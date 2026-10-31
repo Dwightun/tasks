@@ -10,6 +10,7 @@ extension Notification.Name {
 final class HabitStore: ObservableObject {
     @Published private(set) var habits: [Habit] = []
     @Published private(set) var lastReviewedWeek: String? = ReviewSettings.lastReviewedWeek
+    @Published private(set) var reflections: [String: DayReflection] = ReflectionStorage.load()
     private var observer: NSObjectProtocol?
 
     init() {
@@ -60,6 +61,12 @@ final class HabitStore: ObservableObject {
         persist()
     }
 
+    func removeRepetition(_ id: UUID, on date: Date) {
+        guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
+        habits[index].removeRepetition(on: date)
+        persist()
+    }
+
     func setStatus(_ id: UUID, _ status: DayStatus?, on date: Date, reason: SkipReason? = nil) {
         guard let index = habits.firstIndex(where: { $0.id == id }) else { return }
         habits[index].setStatus(status, onKey: DayKey.key(for: date), reason: reason)
@@ -96,6 +103,23 @@ final class HabitStore: ObservableObject {
         let key = DayKey.key(for: Habit.monday(of: weekStart))
         ReviewSettings.lastReviewedWeek = key
         lastReviewedWeek = key
+    }
+
+    func reflection(on date: Date) -> DayReflection? {
+        reflections[DayKey.key(for: date)]
+    }
+
+    func setReflection(_ reflection: DayReflection?, on date: Date) {
+        reflections[DayKey.key(for: date)] = reflection
+        ReflectionStorage.save(reflections)
+    }
+
+    func updateCheckIn(enabled: Bool, minutes: Int, reminder: Bool) {
+        ReviewSettings.checkInEnabled = enabled
+        ReviewSettings.checkInMinutes = minutes
+        ReviewSettings.checkInReminder = reminder
+        objectWillChange.send()
+        rescheduleReminders()
     }
 
     func updateReviewReminder(enabled: Bool, minutes: Int) {

@@ -5,6 +5,7 @@ struct WeekStrip: View {
     let habit: Habit
     let onToggle: (Date) -> Void
     let onSetStatus: (Date, DayStatus?, SkipReason?) -> Void
+    let onRemoveRepetition: (Date) -> Void
 
     var body: some View {
         let calendar = Calendar.current
@@ -47,7 +48,8 @@ struct WeekStrip: View {
                     color: Color(hex: habit.colorHex),
                     status: status,
                     size: 34,
-                    idleColor: planned ? Color(.separator) : Color(.separator).opacity(0.35)
+                    idleColor: planned ? Color(.separator) : Color(.separator).opacity(0.35),
+                    progress: habit.progress(onKey: key)
                 )
                 Text("\(calendar.component(.day, from: date))")
                     .font(.caption2)
@@ -61,9 +63,12 @@ struct WeekStrip: View {
         .disabled(isFuture)
         .contextMenu {
             if !isFuture {
-                StatusMenuItems(habit: habit, current: status) { newStatus, reason in
-                    onSetStatus(date, newStatus, reason)
-                }
+                StatusMenuItems(
+                    habit: habit,
+                    current: status,
+                    onSelect: { newStatus, reason in onSetStatus(date, newStatus, reason) },
+                    onRemoveRepetition: { onRemoveRepetition(date) }
+                )
             }
         }
     }

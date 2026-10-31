@@ -21,6 +21,28 @@ enum ReviewSettings {
         set { defaults.set(newValue, forKey: minutesKey) }
     }
 
+    private static let checkInEnabledKey = "checkInEnabled"
+    private static let checkInMinutesKey = "checkInMinutes"
+    private static let checkInReminderKey = "checkInReminder"
+
+    /// Evening check-in card on the main screen.
+    static var checkInEnabled: Bool {
+        get { defaults.object(forKey: checkInEnabledKey) as? Bool ?? true }
+        set { defaults.set(newValue, forKey: checkInEnabledKey) }
+    }
+
+    /// From what time the check-in is offered, minutes since midnight.
+    static var checkInMinutes: Int {
+        get { defaults.object(forKey: checkInMinutesKey) as? Int ?? 20 * 60 }
+        set { defaults.set(newValue, forKey: checkInMinutesKey) }
+    }
+
+    /// Daily notification for the check-in; off unless the user asks for it.
+    static var checkInReminder: Bool {
+        get { defaults.object(forKey: checkInReminderKey) as? Bool ?? false }
+        set { defaults.set(newValue, forKey: checkInReminderKey) }
+    }
+
     /// Monday key of the last week the user went through.
     static var lastReviewedWeek: String? {
         get { defaults.string(forKey: lastReviewedKey) }

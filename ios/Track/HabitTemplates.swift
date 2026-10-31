@@ -5,11 +5,15 @@ struct HabitTemplate: Identifiable {
     let id: String
     let name: String
     let colorHex: String
+    let icon: String
+    var dailyTarget = 1
     let periodicity: Periodicity
     let plan: PlanDetails
 
     func makeHabit() -> Habit {
         var habit = Habit(name: name, colorHex: colorHex, periodicity: periodicity)
+        habit.icon = icon
+        habit.dailyTarget = dailyTarget
         habit.plan = plan
         return habit
     }
@@ -19,6 +23,7 @@ struct HabitTemplate: Identifiable {
             id: "walk",
             name: "Прогулка",
             colorHex: "#69DB7C",
+            icon: "figure.walk",
             periodicity: .timesPerWeek(3),
             plan: PlanDetails(
                 cue: "После работы",
@@ -32,6 +37,7 @@ struct HabitTemplate: Identifiable {
             id: "reading",
             name: "Чтение",
             colorHex: "#4DABF7",
+            icon: "book",
             periodicity: .daily,
             plan: PlanDetails(
                 cue: "Когда ложусь в кровать",
@@ -44,6 +50,7 @@ struct HabitTemplate: Identifiable {
             id: "water",
             name: "Стакан воды утром",
             colorHex: "#38D9A9",
+            icon: "sun.max",
             periodicity: .daily,
             plan: PlanDetails(
                 cue: "Сразу после пробуждения",
@@ -53,9 +60,23 @@ struct HabitTemplate: Identifiable {
             )
         ),
         HabitTemplate(
+            id: "water-day",
+            name: "Вода",
+            colorHex: "#4DABF7",
+            icon: "drop",
+            dailyTarget: 6,
+            periodicity: .daily,
+            plan: PlanDetails(
+                cue: "После каждого приёма пищи и утром",
+                firstStep: "Налить стакан",
+                preparation: "Бутылка воды на рабочем столе"
+            )
+        ),
+        HabitTemplate(
             id: "exercise",
             name: "Зарядка",
             colorHex: "#FFA94D",
+            icon: "figure.yoga",
             periodicity: .weekdays([0, 1, 2, 3, 4]),
             plan: PlanDetails(
                 cue: "После того как умылся",
@@ -67,6 +88,7 @@ struct HabitTemplate: Identifiable {
             id: "workout",
             name: "Тренировка",
             colorHex: "#FF6B6B",
+            icon: "dumbbell",
             periodicity: .timesPerWeek(2),
             plan: PlanDetails(
                 firstStep: "Собрать сумку и выйти",
@@ -80,6 +102,7 @@ struct HabitTemplate: Identifiable {
             id: "no-phone",
             name: "Без телефона перед сном",
             colorHex: "#748FFC",
+            icon: "iphone.slash",
             periodicity: .daily,
             plan: PlanDetails(
                 cue: "Когда ложусь в кровать",

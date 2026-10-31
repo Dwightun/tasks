@@ -28,6 +28,10 @@ final class AppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCent
             await MainActor.run { AppRouter.shared.showWeeklyReview = true }
             return
         }
+        if request.identifier == ReminderScheduler.checkInID {
+            await MainActor.run { AppRouter.shared.showCheckIn = true }
+            return
+        }
 
         let info = request.content.userInfo
         guard

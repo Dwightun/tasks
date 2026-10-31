@@ -6,6 +6,8 @@ struct CheckCircle: View {
     var size: CGFloat = 22
     /// Ring color while nothing is recorded; defaults to the habit color.
     var idleColor: Color?
+    /// Share of daily repetitions done, drawn for the partial status.
+    var progress: Double = 0
 
     var body: some View {
         ZStack {
@@ -13,6 +15,13 @@ struct CheckCircle: View {
             case .some(.full):
                 Circle().fill(color)
                 symbol("checkmark", Color.white)
+            case .some(.partial):
+                Circle().strokeBorder(idleColor ?? color.opacity(0.3), lineWidth: 2)
+                Circle()
+                    .inset(by: 1)
+                    .trim(from: 0, to: min(max(progress, 0), 1))
+                    .stroke(color, style: StrokeStyle(lineWidth: max(2, size / 10), lineCap: .round))
+                    .rotationEffect(.degrees(-90))
             case .some(.minimal):
                 Circle().fill(color.opacity(0.45))
                 Circle().strokeBorder(color, lineWidth: 2)

@@ -87,7 +87,7 @@ struct HabitWidgetRow: View {
 
         Button(intent: ToggleHabitIntent(habitID: habit.id)) {
             HStack(spacing: 8) {
-                CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: date)), size: 22)
+                CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: date)), size: 22, progress: habit.progress(onKey: DayKey.key(for: date)))
                 Text(habit.name)
                     .font(.subheadline.weight(.medium))
                     .foregroundStyle(done ? Color.secondary : Color.primary)
@@ -181,7 +181,7 @@ struct ActivityWidgetView: View {
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 Button(intent: ToggleHabitIntent(habitID: habit.id)) {
-                    CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: entry.date)), size: 20)
+                    CheckCircle(color: Color(hex: habit.colorHex), status: habit.status(onKey: DayKey.key(for: entry.date)), size: 20, progress: habit.progress(onKey: DayKey.key(for: entry.date)))
                 }
                 .buttonStyle(.plain)
             }
@@ -323,11 +323,112 @@ struct TodayWidget: Widget {
     }
 }
 
+// MARK: - Single habit Lock Screen widget
+
+struct SingleHabitEntry: TimelineEntry {
+    let date: Date
+    let habit: Habit?
+}
+
+struct SingleHabitProvider: AppIntentTimelineProvider {
+    func placeholder(in context: Context) -> SingleHabitEntry {
+        var sample = Habit(name: "Вода", colorHex: "#4DABF7")
+        sample.icon = "drop"
+        return SingleHabitEntry(date: Date(), habit: sample)
+    }
+
+    func snapshot(for configuration: SingleHabitConfigIntent, in context: Context) async -> SingleHabitEntry {
+        entry(for: configuration)
+    }
+
+    func timeline(for configuration: SingleHabitConfigIntent, in context: Context) async -> Timeline<SingleHabitEntry> {
+        Timeline(entries: [entry(for: configuration)], policy: .after(nextMidnight()))
+    }
+
+    private func entry(for configuration: SingleHabitConfigIntent) -> SingleHabitEntry {
+        let now = Date()
+        let habits = HabitStorage.load()
+        let chosen = configuration.habit.flatMap { entity in habits.first { $0.id.uuidString == entity.id } }
+        let fallback = habits.first { $0.isPlanned(on: now) && !$0.isCompleted(on: now) }
+            ?? habits.first { $0.isPlanned(on: now) }
+            ?? habits.first
+        return SingleHabitEntry(date: now, habit: chosen ?? fallback)
+    }
+}
+
+struct SingleHabitWidgetView: View {
+    @Environment(\.widgetFamily) private var family
+    let entry: SingleHabitEntry
+
+    var body: some View {
+        content
+            .containerBackground(for: .widget) { Color.clear }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let habit = entry.habit {
+            let key = DayKey.key(for: entry.date)
+            let progress = habit.progress(onKey: key)
+            Button(intent: ToggleHabitIntent(habitID: habit.id)) {
+                if family == .accessoryCircular {
+                    Gauge(value: progress) {
+                        Image(systemName: habit.icon ?? "checkmark")
+                    } currentValueLabel: {
+                        Image(systemName: habit.isCompleted(onKey: key) ? "checkmark" : (habit.icon ?? "circle"))
+                            .font(.system(size: 18, weight: .semibold))
+                    }
+                    .gaugeStyle(.accessoryCircularCapacity)
+                } else {
+                    HStack(spacing: 8) {
+                        Image(systemName: habit.icon ?? "circle")
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(habit.name)
+                                .font(.headline)
+                                .lineLimit(1)
+                            Text(statusText(habit, key: key))
+                                .font(.caption)
+                                .lineLimit(1)
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .buttonStyle(.plain)
+        } else {
+            Text("Нет привычек")
+                .font(.caption)
+        }
+    }
+
+    private func statusText(_ habit: Habit, key: String) -> String {
+        if habit.isCompleted(onKey: key) { return "Выполнено ✓" }
+        if habit.dailyTarget > 1 { return "\(habit.count(onKey: key)) из \(habit.dailyTarget) · нажмите +1" }
+        return "Нажмите, чтобы отметить"
+    }
+}
+
+struct SingleHabitWidget: Widget {
+    let kind = "TrackSingleHabitWidget"
+
+    var body: some WidgetConfiguration {
+        AppIntentConfiguration(kind: kind, intent: SingleHabitConfigIntent.self, provider: SingleHabitProvider()) { entry in
+            SingleHabitWidgetView(entry: entry)
+        }
+        .configurationDisplayName("Привычка")
+        .description("Иконка и прогресс одной привычки; нажатие отмечает выполнение.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular])
+    }
+}
+
 @main
 struct TrackWidgetBundle: WidgetBundle {
     var body: some Widget {
         HabitListWidget()
         HabitActivityWidget()
         TodayWidget()
+        SingleHabitWidget()
     }
 }

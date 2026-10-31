@@ -5,8 +5,14 @@ struct StatusMenuItems: View {
     let habit: Habit
     let current: DayStatus?
     let onSelect: (DayStatus?, SkipReason?) -> Void
+    var onRemoveRepetition: (() -> Void)?
 
     var body: some View {
+        if habit.dailyTarget > 1, current == .partial || current == .full, let onRemoveRepetition {
+            Button(action: onRemoveRepetition) {
+                Label("Убрать один повтор", systemImage: "minus.circle")
+            }
+        }
         Button {
             onSelect(.full, nil)
         } label: {

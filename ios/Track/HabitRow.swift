@@ -5,24 +5,36 @@ struct HabitRow: View {
     let onOpen: () -> Void
     let onToggle: () -> Void
     let onSetStatus: (DayStatus?, SkipReason?) -> Void
+    let onRemoveRepetition: () -> Void
 
     var body: some View {
         let today = Date()
-        let status = habit.status(onKey: DayKey.key(for: today))
+        let todayKey = DayKey.key(for: today)
+        let status = habit.status(onKey: todayKey)
         let paused = habit.activePause(on: today) != nil
+        let color = Color(hex: habit.colorHex)
 
         // Two sibling buttons rather than nested ones, so a tap on the circle never opens the details.
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             Button(action: onOpen) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(habit.name)
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Color.primary)
-                        .lineLimit(1)
-                    Text(subtitle(today: today))
-                        .font(.footnote)
-                        .foregroundStyle(Color.secondary)
-                        .lineLimit(1)
+                HStack(spacing: 12) {
+                    if let icon = habit.icon {
+                        Image(systemName: icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundStyle(color)
+                            .frame(width: 36, height: 36)
+                            .background(color.opacity(0.15), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(habit.name)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Color.primary)
+                            .lineLimit(1)
+                        Text(subtitle(today: today))
+                            .font(.footnote)
+                            .foregroundStyle(Color.secondary)
+                            .lineLimit(1)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .contentShape(Rectangle())
@@ -30,13 +42,25 @@ struct HabitRow: View {
             .buttonStyle(.plain)
 
             Button(action: onToggle) {
-                CheckCircle(color: Color(hex: habit.colorHex), status: status, size: 44, idleColor: Color(.separator))
-                    .contentShape(Circle())
+                CheckCircle(
+                    color: color,
+                    status: status,
+                    size: 44,
+                    idleColor: Color(.separator),
+                    progress: habit.progress(onKey: todayKey)
+                )
+                .contentShape(Circle())
             }
             .buttonStyle(.plain)
-            .sensoryFeedback(.success, trigger: habit.isCompleted(onKey: DayKey.key(for: today))) { _, newValue in newValue }
+            .sensoryFeedback(.success, trigger: habit.isCompleted(onKey: todayKey)) { _, newValue in newValue }
+            .sensoryFeedback(.increase, trigger: habit.count(onKey: todayKey))
             .contextMenu {
-                StatusMenuItems(habit: habit, current: status, onSelect: onSetStatus)
+                StatusMenuItems(
+                    habit: habit,
+                    current: status,
+                    onSelect: onSetStatus,
+                    onRemoveRepetition: onRemoveRepetition
+                )
             }
         }
         .padding(14)
@@ -51,7 +75,11 @@ struct HabitRow: View {
         if let pause = habit.activePause(on: today) {
             return "⏸ \(pause.kind.title)" + (pause.end.flatMap { DayKey.date(from: $0) }.map { " до \(Self.shortDate($0))" } ?? "")
         }
-        var parts = [habit.periodLabel]
+        var parts: [String] = []
+        if habit.dailyTarget > 1 {
+            parts.append("\(habit.count(onKey: DayKey.key(for: today)))/\(habit.dailyTarget) сегодня")
+        }
+        parts.append(habit.periodLabel)
         let week = habit.weekProgress(containing: today)
         if week.planned > 0 { parts.append("\(week.completed)/\(week.planned) за неделю") }
         if let time = habit.reminderLabel { parts.append("🔔 \(time)") }

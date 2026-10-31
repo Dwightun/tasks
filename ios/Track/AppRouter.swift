@@ -5,4 +5,5 @@ final class AppRouter: ObservableObject {
     static let shared = AppRouter()
 
     @Published var showWeeklyReview = false
+    @Published var showCheckIn = false
 }

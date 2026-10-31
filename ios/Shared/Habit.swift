@@ -23,6 +23,8 @@ enum Periodicity: Codable, Hashable {
 /// What actually happened on a day. A day without an entry means "no data", not a confirmed miss.
 enum DayStatus: String, Codable, CaseIterable {
     case full
+    /// Some, but not all, of the daily repetitions (habits with a daily target above one).
+    case partial
     case minimal
     case rest
     case skipped
@@ -54,6 +56,8 @@ struct DayEntry: Codable, Hashable {
     var status: DayStatus
     var reason: SkipReason?
     var note: String?
+    /// Repetitions done that day, for habits with a daily target above one.
+    var count: Int?
 }
 
 /// Optional plan details; every field may stay empty.
@@ -105,6 +109,10 @@ struct Habit: Identifiable, Hashable {
     var id: UUID
     var name: String
     var colorHex: String
+    /// SF Symbol name; nil shows no icon.
+    var icon: String?
+    /// Repetitions per day that make the day complete (1 for a simple check).
+    var dailyTarget: Int
     var createdAt: Date
     /// Reminder time as minutes since midnight; nil means no reminder.
     var reminderMinutes: Int?
@@ -128,6 +136,8 @@ struct Habit: Identifiable, Hashable {
         self.id = id
         self.name = name
         self.colorHex = colorHex
+        self.icon = nil
+        self.dailyTarget = 1
         self.createdAt = createdAt
         self.reminderMinutes = reminderMinutes
         self.plan = PlanDetails()
@@ -202,15 +212,54 @@ struct Habit: Identifiable, Hashable {
         isCompleted(onKey: DayKey.key(for: date))
     }
 
+    /// Nothing recorded yet, or a counted habit still short of its daily target.
+    func isOpen(onKey key: String) -> Bool {
+        let dayStatus = self.status(onKey: key)
+        return dayStatus == nil || dayStatus == .partial
+    }
+
     func isPaused(onKey key: String) -> Bool {
         pauses.contains { $0.contains(key) }
     }
 
     mutating func setStatus(_ status: DayStatus?, onKey key: String, reason: SkipReason? = nil) {
-        if let status {
-            entries[key] = DayEntry(status: status, reason: status == .skipped ? reason : nil)
-        } else {
+        guard let status else {
             entries.removeValue(forKey: key)
+            return
+        }
+        var entry = DayEntry(status: status, reason: status == .skipped ? reason : nil)
+        if status == .full, dailyTarget > 1 { entry.count = dailyTarget }
+        entries[key] = entry
+    }
+
+    func count(onKey key: String) -> Int {
+        guard let entry = entries[key] else { return 0 }
+        if let count = entry.count { return count }
+        return entry.status == .full ? dailyTarget : 0
+    }
+
+    func progress(onKey key: String) -> Double {
+        Double(min(count(onKey: key), dailyTarget)) / Double(dailyTarget)
+    }
+
+    /// Takes back one repetition of a counted habit.
+    mutating func removeRepetition(on date: Date = Date()) {
+        let key = DayKey.key(for: date)
+        let current = status(onKey: key)
+        guard dailyTarget > 1, current == .full || current == .partial else { return }
+        let next = count(onKey: key) - 1
+        entries[key] = next > 0 ? DayEntry(status: .partial, count: next) : nil
+    }
+
+    /// Changing the target re-evaluates partial days so "2 of 2" doesn't stay unfinished.
+    mutating func setDailyTarget(_ target: Int) {
+        let newTarget = max(1, target)
+        guard newTarget != dailyTarget else { return }
+        dailyTarget = newTarget
+        for (key, entry) in entries where entry.status == .partial {
+            if (entry.count ?? 0) >= newTarget {
+                entries[key] = DayEntry(status: .full, count: newTarget > 1 ? newTarget : nil)
+            }
         }
     }
 
@@ -236,10 +285,24 @@ struct Habit: Identifiable, Hashable {
         }
     }
 
-    /// One-tap logging: a completed day is cleared, anything else becomes a full completion.
+    /// One-tap logging: a completed day is cleared; otherwise a simple habit completes,
+    /// and a counted habit gains one repetition until it reaches the daily target.
     mutating func toggle(on date: Date = Date()) {
         let key = DayKey.key(for: date)
-        setStatus(isCompleted(onKey: key) ? nil : .full, onKey: key)
+        if isCompleted(onKey: key) {
+            setStatus(nil, onKey: key)
+            return
+        }
+        guard dailyTarget > 1 else {
+            setStatus(.full, onKey: key)
+            return
+        }
+        let next = (status(onKey: key) == .partial ? count(onKey: key) : 0) + 1
+        if next >= dailyTarget {
+            setStatus(.full, onKey: key)
+        } else {
+            entries[key] = DayEntry(status: .partial, count: next)
+        }
     }
 
     var totalCompleted: Int {
@@ -257,7 +320,7 @@ struct Habit: Identifiable, Hashable {
 
 extension Habit: Codable {
     private enum CodingKeys: String, CodingKey {
-        case id, name, colorHex, createdAt, reminderMinutes, plan, planHistory, entries, pauses, weekReasons
+        case id, name, colorHex, icon, dailyTarget, createdAt, reminderMinutes, plan, planHistory, entries, pauses, weekReasons
         // v1 format
         case periodicity, completions
     }
@@ -267,6 +330,9 @@ extension Habit: Codable {
         id = try c.decode(UUID.self, forKey: .id)
         name = try c.decode(String.self, forKey: .name)
         colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex) ?? "#38D9A9"
+        icon = try c.decodeIfPresent(String.self, forKey: .icon)
+        let target = try c.decodeIfPresent(Int.self, forKey: .dailyTarget) ?? 1
+        dailyTarget = max(1, target)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         reminderMinutes = try c.decodeIfPresent(Int.self, forKey: .reminderMinutes)
         plan = try c.decodeIfPresent(PlanDetails.self, forKey: .plan) ?? PlanDetails()
@@ -293,6 +359,8 @@ extension Habit: Codable {
         try c.encode(id, forKey: .id)
         try c.encode(name, forKey: .name)
         try c.encode(colorHex, forKey: .colorHex)
+        try c.encodeIfPresent(icon, forKey: .icon)
+        try c.encode(dailyTarget, forKey: .dailyTarget)
         try c.encode(createdAt, forKey: .createdAt)
         try c.encodeIfPresent(reminderMinutes, forKey: .reminderMinutes)
         try c.encode(plan, forKey: .plan)
